@@ -59,6 +59,7 @@ Follow the prompts in the terminal to either use a custom date range (by enterin
 Upon successful execution, the generated invoices will be saved as PDF files in the `invoices` folder within your project directory. 
 
 ## To-do:
+- Ask the user whether they want to generate invoices for all clients (default), a single client or a list of clients (for the latter, print all clients from `students.json` for reference)
 - Implement unit tests to test `credentials.json` and validate fields in `students.json`
 - Implement differential behaviour based on the `client_type`. For example, combine all the invoices from one agency into a single invoice. 
 - Add an optional prompt to write a short report for each invoice
