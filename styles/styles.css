@@ -1,0 +1,50 @@
+body {
+  font-family: 'Helvetica', 'Arial', sans-serif;
+}
+
+h1 {
+  color: #333;
+  font-size: 24px;
+}
+
+h2 {
+  font-size: 20px;
+  margin-top: 30px;
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 20px;
+  width: auto;
+  border: 1px solid #c6c6c6;
+  border-radius: 10px;
+}
+
+td {
+  border: 1px solid #c6c6c6;
+  text-align: left;
+  padding: 10px;
+}
+
+/* Apply border-radius to the top left and right corners of the first row */
+tr:first-child td:first-child {
+  border-top-left-radius: 10px;
+}
+
+tr:first-child td:last-child {
+  border-top-right-radius: 10px;
+}
+
+/* Apply border-radius to the bottom left and right corners of the last row */
+tr:last-child td:first-child {
+  border-bottom-left-radius: 10px;
+}
+
+tr:last-child td:last-child {
+  border-bottom-right-radius: 10px;
+}
+
+#money-owed {
+  font-weight: bold;
+}
