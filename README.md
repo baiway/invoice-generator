@@ -29,7 +29,7 @@ To clone the project, run the following command in your terminal:
   pip install -r requirements.txt
 ```
 This will install all the necessary Python packages.
-2. **Configure student data:** Navigate to the `data` directory and create a `students.json` file with your student/client data. Here's an example:
+2. **Configure student data:** Create a directory called `data` in the root directory of the project, then create a `students.json` within `data` that contains your student/client data. Here's an example:
 ```
   {
       "Alice": {
