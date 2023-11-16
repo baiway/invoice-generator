@@ -1,12 +1,13 @@
-import os.path
-import re
+from pathlib import Path
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
 
-def authenticate_google_calendar():
+def authenticate_google_calendar(
+    credentials_path="data/credentials.json", token_path="data/token.json"
+):
     """Setup the Google API authentication.
     Expects `credentials.json` in the `data` directory for the initial setup
     and uses `token.json` (also in the `data` directory) for subsequent authentication.
@@ -14,18 +15,20 @@ def authenticate_google_calendar():
     Returns a Google Calendar service object.
     """
     SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+
+    if not Path(credentials_path).is_file():
+        raise FileNotFoundError(f"credentials.json not found at `{credentials_path}`")
+
     creds = None
-    if os.path.exists("data/token.json"):
-        creds = Credentials.from_authorized_user_file("data/token.json", SCOPES)
+    if Path(token_path).is_file():
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "data/credentials.json", SCOPES
-            )
+            flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open("data/token.json", "w") as token:
+        with open(token_path, "w") as token:
             token.write(creds.to_json())
     service = build("calendar", "v3", credentials=creds)
     return service
@@ -52,10 +55,24 @@ def fetch_calendar_events(service, start_date, end_date):
     return events_result.get("items", [])
 
 
+def attendee_match(attendees, student_data):
+    for attendee in attendees:
+        email = attendee.get("email")
+        for student_name, info in student_data.items():
+            if email in info["emails"]:
+                return student_name
+    return None
+
+
 def process_events(events, student_data):
-    """Processes a list of calendar events and categorises them based on student names.
-    Uses regex to parse the event summary for student names, handling aliases as specified
-    in `students.json`. Events that do not match the expected format are skipped.
+    """Matches Google Calendar events to students listed in `students.json` based on
+    attendee email addresses. If no match is found, it is assumed that this is a client
+    that is only seen in-person but that the "Tutoring [student name]" convention for
+    labelling Google Calendar events has still been followed, so the student name can
+    be extracted from the event title. If a match still isn't found, then the event
+    probably doesn't correspond to a tutoring session, but a warning is still printed
+    to the screen in case, for example, you forgot to add a new student's details to
+    `students.json`.
 
     Returns a dictionary with the following structure:
         lessons["student"] = [
@@ -63,31 +80,22 @@ def process_events(events, student_data):
             (lesson2_start_time, lesson2_end_time),
             ...
         ]
-    where start_time and end_time are datetime objects.
+    where start_time and end_time are datetime strings in ISO 8601 format. For example,
+    2023-11-05T11:15:00Z corresponds to the 11:15am ("Zulu" time, aka UTC) on 5th
+    November 2023.
     """
     lessons = {}
     for event in events:
-        summary = event["summary"]
+        event_title = event["summary"]
+        attendees = event.get("attendees", [])
         student_name = None
 
-        # This regex search is used to determine whether parents
-        # have booked a session under their name using my booking page.
-        # If they do, the event is always titled "Tutoring (Firstname Lastname)"
-        # Sometimes there are trailing spaces in the firstname and lastname fields;
-        # these are removed here.
-        match = re.search(r"\((.*?)\)", summary)
-        if match:
-            extracted_name = match.group(1).strip()  # extract and strip spaces
-            extracted_name = re.sub(r"\s+", " ", extracted_name)
-            for student, info in student_data.items():
-                if extracted_name in info["aliases"]:
-                    student_name = student
-                    break
-        elif summary.startswith("Tutoring "):
-            student_name = summary.split("Tutoring ")[1].strip()
-
-        if not student_name:
-            print(f"Skipping event with unexpected format: '{summary}'")
+        if attendees:
+            student_name = attendee_match(attendees, student_data)
+        elif event_title.startswith("Tutoring "):
+            student_name = event_title.split("Tutoring ")[1].strip()
+        else:
+            print(f"Skipping event with unexpected format: '{event_title}'")
             continue
 
         start = event["start"].get("dateTime", event["start"].get("date"))
