@@ -1,25 +1,29 @@
 import json
-import os
-from src.calendar_api import authenticate_google_calendar, fetch_calendar_events, process_events
+from pathlib import Path
+from src.calendar_api import (
+    authenticate_google_calendar,
+    fetch_calendar_events,
+    process_events,
+)
 from src.utils import get_user_choice, get_last_full_month, get_date_input
 from src.format_outputs import write_invoices
 
+
 def main():
+    # Load `students.json`
+    student_data_path = Path("data/students.json")
     try:
-        with open("data/students.json", "r") as f:
+        with open(student_data_path, "r") as f:
             student_data = json.load(f)
     except FileNotFoundError:
-        print("Error: 'students.json' file not found in 'data' directory.")
+        print(f"Error: 'students.json' file not found in {student_data_path}.")
         return
     except json.JSONDecodeError:
         print("Error: 'students.json' file is not a valid JSON.")
         return
 
-    try:
-        service = authenticate_google_calendar()
-    except Exception as e:
-        print(f"Error while authenticating Google Calendar: {e}")
-        return
+    # Authenticate Google Calendar
+    service = authenticate_google_calendar()
 
     # Determine date range over which to invoice
     use_custom_range = get_user_choice()
@@ -33,23 +37,16 @@ def main():
     end_date = end_date.replace(hour=23, minute=59, second=59)
 
     # Fetch and process events
-    try:
-        events = fetch_calendar_events(service, start_date, end_date)
-        lessons = process_events(events, student_data)
-    except Exception as e:
-        print(f"Error while fetching or processing events: {e}")
-        return
+    events = fetch_calendar_events(service, start_date, end_date)
+    lessons = process_events(events, student_data)
 
-    output_folder = "invoices"
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    # Write invoices
+    output_dir = Path("./invoices")
+    if not output_dir.exists():
+        output_dir.mkdir()
+    write_invoices(lessons, student_data, start_date, end_date)
+    print(f"Done! Invoices saved here: {output_dir.resolve()}")
 
-    try:
-        write_invoices(lessons, student_data, start_date, end_date)
-    except Exception as e:
-        print(f"Error while writing invoices: {e}")
-    
-    print("Done! Invoices saved in `invoices` folder.")
 
 if __name__ == "__main__":
     main()
