@@ -102,7 +102,12 @@ def process_events(events, student_data):
         end = event["end"].get("dateTime", event["end"].get("date"))
 
         if student_name not in lessons:
-            lessons[student_name] = {"start": [], "end": []}
+            lessons[student_name] = {
+                "start": [], 
+                "end": [], 
+                "rate": student_data[student_name]["rate"], 
+                "client_type": student_data[student_name]["client_type"]
+            }
 
         lessons[student_name]["start"].append(start)
         lessons[student_name]["end"].append(end)
