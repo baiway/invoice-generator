@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-from pathlib import Path
 from datetime import datetime, timedelta
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML, CSS
@@ -62,8 +61,9 @@ def get_invoice_period(start_date, end_date):
         return f"{formatted_start_date} to {formatted_end_date}"
 
 
-def write_invoices(lessons, student_data, start_date, end_date):
+def write_invoices(output_dir, lessons, start_date, end_date):
     """Generates and writes invoice PDFs for each student."""
+    # Initialise Jinja2 and WeasyPrint and add custom filters
     env = Environment(
         loader=FileSystemLoader("."), autoescape=select_autoescape(["html", "xml"])
     )
@@ -72,41 +72,53 @@ def write_invoices(lessons, student_data, start_date, end_date):
     env.filters["hours_minutes"] = format_hours_minutes
     env.filters["currency"] = format_currency
     template = env.get_template("templates/invoice-template.html")
-    css = CSS(filename=Path("styles/styles.css"))
+    css = CSS("styles/styles.css")
 
     invoice_date = datetime.now().strftime("%d/%m/%Y")
     invoice_period = get_invoice_period(start_date, end_date)
 
-    for student, times in lessons.items():
+    agency_html = {}
+    
+    for student, lesson_info in lessons.items():
         start_times = np.array(
-            [s.rstrip("Z") for s in times["start"]], dtype="datetime64"
+            [s.rstrip("Z") for s in lesson_info["start"]], dtype="datetime64"
         )
-        end_times = np.array([e.rstrip("Z") for e in times["end"]], dtype="datetime64")
+        end_times = np.array([e.rstrip("Z") for e in lesson_info["end"]], dtype="datetime64")
 
         session_lengths = end_times - start_times
 
         total_hours = np.sum(session_lengths)
-        total_charge = (total_hours.astype(int) / 3600) * student_data[student]["rate"]
+        total_charge = (total_hours.astype(int) / 3600) * lesson_info["rate"]
         rendered_html = template.render(
             student=student,
             invoice_period=invoice_period,
             invoice_date=invoice_date,
             timings=zip(start_times, end_times, session_lengths),
             total_hours=total_hours,
-            rate=student_data[student]["rate"],
+            rate=lesson_info["rate"],
             total_charge=total_charge,
         )
+        
+        client_type = lesson_info["client_type"]
+        
+        if client_type == "private":
+            html = HTML(string=rendered_html)
+            filename = f"{student.lower()}-invoice.pdf"
+            html.write_pdf(output_dir / filename, stylesheets=[css])
+        else:
+            if client_type not in agency_html:
+                agency_html[client_type] = []
+            agency_html[client_type].append(rendered_html)            
+    
+    for agency, pages in agency_html.items():
+        combined_html = "<html><body>"
+        for page in pages:
+            combined_html += f"{page}<hr>"
+        combined_html += "</body></html>"
 
-        html = HTML(string=rendered_html)
-        html.write_pdf(f"invoices/{student}-invoice.pdf", stylesheets=[css])
-
-
-# for student in lessons.keys():
-#     grove_list =
-#     if student_data[student] == "grove":
-
-# Print a list of students who you haven't seen this month
-# for student in student_data.keys():
-#     if student not in lessons.keys():
-#         print(f"No lessons found with student: {student}")
-# return lessons
+        html = HTML(string=combined_html)
+        filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
+        html.write_pdf(output_dir / filename, stylesheets=[css])
+    
+# TODO
+# - Print a list of students who you haven't seen this month
