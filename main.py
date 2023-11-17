@@ -6,7 +6,7 @@ from src.calendar_api import (
     process_events,
 )
 from src.utils import get_user_choice, get_last_full_month, get_date_input
-from src.format_outputs import write_invoices
+from src.format_outputs import write_invoices, print_inactive_students
 
 
 def main():
@@ -40,13 +40,15 @@ def main():
     events = fetch_calendar_events(service, start_date, end_date)
     lessons = process_events(events, student_data)
 
+    # Print list of students not seen this month
+    print_inactive_students(lessons, student_data)
+
     # Write invoices
     output_dir = Path("./invoices")
     if not output_dir.exists():
         output_dir.mkdir()
     write_invoices(output_dir, lessons, start_date, end_date)
-    print(f"Done! Invoices saved here: {output_dir.resolve()}")
-
+    print(f"Invoices saved here: {output_dir.resolve()}")
 
 if __name__ == "__main__":
     main()

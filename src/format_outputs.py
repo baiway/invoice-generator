@@ -103,7 +103,7 @@ def write_invoices(output_dir, lessons, start_date, end_date):
         
         if client_type == "private":
             html = HTML(string=rendered_html)
-            filename = f"{student.lower()}-invoice.pdf"
+            filename = f"{student.lower()}-invoice.pdf".replace(" ", -)
             html.write_pdf(output_dir / filename, stylesheets=[css])
         else:
             if client_type not in agency_html:
@@ -119,6 +119,10 @@ def write_invoices(output_dir, lessons, start_date, end_date):
         html = HTML(string=combined_html)
         filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
         html.write_pdf(output_dir / filename, stylesheets=[css])
-    
+
+def print_inactive_students(lessons, student_data):
+    for student in student_data:
+        if student not in lessons:
+            print(f"  {student} not seen in this period.")
 # TODO
 # - Print a list of students who you haven't seen this month
