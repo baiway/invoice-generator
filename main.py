@@ -44,7 +44,7 @@ def main():
     output_dir = Path("./invoices")
     if not output_dir.exists():
         output_dir.mkdir()
-    write_invoices(lessons, student_data, start_date, end_date)
+    write_invoices(output_dir, lessons, start_date, end_date)
     print(f"Done! Invoices saved here: {output_dir.resolve()}")
 
 
