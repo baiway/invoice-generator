@@ -16,7 +16,7 @@
         {% endfor %}
     </table>
 
-    <table>
+    <table class="aggregates">
         <tr>
             <td>Total time</td>
             <td>{{ total_hours | hours_minutes }}</td>
@@ -25,7 +25,7 @@
             <td>Rate</td>
             <td>£{{ rate }}/hour</td>
         </tr>
-        <tr id="money-owed">
+        <tr class="money-owed">
             <td>Money owed</td>
             <td>{{ total_charge | currency }}</td>
         </tr>

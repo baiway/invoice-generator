@@ -45,6 +45,10 @@ tr:last-child td:last-child {
   border-bottom-right-radius: 10px;
 }
 
-#money-owed {
+.aggregates {
+  margin-bottom: 20px;
+}
+
+.money-owed {
   font-weight: bold;
 }
