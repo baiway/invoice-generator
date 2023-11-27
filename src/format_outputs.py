@@ -103,7 +103,7 @@ def write_invoices(output_dir, lessons, start_date, end_date):
         
         if client_type == "private":
             html = HTML(string=rendered_html)
-            filename = f"{student.lower()}-invoice.pdf".replace(" ", -)
+            filename = f"{student.lower()}-invoice.pdf".replace(" ", "-")
             html.write_pdf(output_dir / filename, stylesheets=[css])
         else:
             if client_type not in agency_html:
