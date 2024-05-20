@@ -2,5 +2,7 @@ credentials.json
 token.json
 students.json
 __pycache__
+.venv
 invoices
 data
+.DS_Store
