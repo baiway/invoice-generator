@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 from datetime import datetime, timedelta
+import pytz
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML, CSS
 
@@ -15,11 +16,16 @@ def format_british_date(value):
     return date_obj.strftime("%d/%m/%Y")
 
 
-def format_24h_time(value):
+def format_24h_time(t):
     """Converts datetime string to 24-hour time format."""
-    date_str = str(value)
-    date_obj = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S")
-    return date_obj.strftime("%H:%M")
+
+    if isinstance(t, np.datetime64):
+        t = t.astype("datetime64[ms]").astype(datetime).replace(tzinfo=pytz.utc)
+    
+    tz = pytz.timezone("Europe/London")
+    local_time = t.astimezone(tz)
+    
+    return local_time.strftime("%H:%M")
 
 
 def format_hours_minutes(value):
