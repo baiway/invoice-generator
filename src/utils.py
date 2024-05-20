@@ -14,7 +14,7 @@ def get_user_choice():
         elif user_input == "n":
             return False
         else:
-            print(f"Invalid input. Please enter 'y' or 'n'.")
+            print("Invalid input. Please enter 'y' or 'n'.")
 
 
 def get_last_full_month():
@@ -23,7 +23,7 @@ def get_last_full_month():
     11th November, it would return (1st October, 31st October).
     """
     today = datetime.datetime.now(datetime.timezone.utc)
-    first_day_of_current_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    first_day_of_current_month = today.replace(day=1, hour=0, minute=0)
     last_day_of_last_month = first_day_of_current_month - datetime.timedelta(days=1)
     first_day_of_last_month = last_day_of_last_month.replace(day=1)
     return first_day_of_last_month, last_day_of_last_month
@@ -32,10 +32,10 @@ def get_last_full_month():
 def get_date_input(point):
     """Used when the user wants to generate invoices between to dates.
 	"""
-    prompt = f"Enter the {point} date (YYYY-MM-DD): "
     while True:
-        user_input = input(prompt)
+        user_input = input(f"Enter the {point} date (YYYY-MM-DD): ")
         try:
-            return datetime.datetime.fromisoformat(user_input).replace(tzinfo=datetime.timezone.utc)
+            date_obj = datetime.datetime.fromisoformat(user_input)
+            return date_obj.replace(tzinfo=datetime.timezone.utc)
         except ValueError:
             print("Invalid date format. Please use YYYY-MM-DD.")
