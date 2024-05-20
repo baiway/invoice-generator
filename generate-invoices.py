@@ -1,15 +1,11 @@
 import json
 from pathlib import Path
-from src.calendar_api import (
-    authenticate_google_calendar,
-    fetch_calendar_events,
-    process_events,
-)
+from src.calendar_api import authenticate_google_calendar, fetch_events, process_events
 from src.utils import get_user_choice, get_last_full_month, get_date_input
 from src.format_outputs import write_invoices, print_inactive_students
 
 
-def main():
+def generate_invoices():
     # Load `students.json`
     student_data_path = Path("data/students.json")
     try:
@@ -37,7 +33,7 @@ def main():
     end_date = end_date.replace(hour=23, minute=59, second=59)
 
     # Fetch and process events
-    events = fetch_calendar_events(service, start_date, end_date)
+    events = fetch_events(service, start_date, end_date)
     lessons = process_events(events, student_data)
 
     # Print list of students not seen this month
@@ -51,4 +47,4 @@ def main():
     print(f"Invoices saved here: {output_dir.resolve()}")
 
 if __name__ == "__main__":
-    main()
+    generate_invoices()
