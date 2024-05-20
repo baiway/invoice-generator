@@ -34,7 +34,7 @@ def authenticate_google_calendar(
     return service
 
 
-def fetch_calendar_events(service, start_date, end_date):
+def fetch_events(service, start_date, end_date):
     """Fetch all Google Calendar events between a specified start and end date.
     Requires a Google Calendar service object and date range.
 
@@ -61,18 +61,22 @@ def attendee_match(attendees, student_data):
         for student_name, info in student_data.items():
             if email in info["emails"]:
                 return student_name
+    print("attendees not found in 'students.json': ", attendees)
     return None
 
 
 def process_events(events, student_data):
     """Matches Google Calendar events to students listed in `students.json` based on
-    attendee email addresses. If no match is found, it is assumed that this is a client
-    that is only seen in-person but that the "Tutoring [student name]" convention for
-    labelling Google Calendar events has still been followed, so the student name can
-    be extracted from the event title. If a match still isn't found, then the event
-    probably doesn't correspond to a tutoring session, but a warning is still printed
-    to the screen in case, for example, you forgot to add a new student's details to
-    `students.json`.
+    attendee email addresses. If no match is found, the following checks are performed:
+    - If no email match but the event name contains "PMT", the event is ignored 
+      (payments handled separately)
+    - If no email match but event still starts with "Tutoring [student name]", 
+      it is assumed that this client is only seen in-person, so the student name can
+      be extracted from the event title.
+    If a match still isn't found, then the event probably doesn't correspond to a 
+    tutoring session (e.g. it could be a call with a parent), but a warning is still 
+    printed to the screen in case, for example, you forgot to add a new student's 
+    details to `students.json`.
 
     Returns a dictionary with the following structure:
         lessons["student"] = [
@@ -82,8 +86,7 @@ def process_events(events, student_data):
         ]
     where start_time and end_time are datetime strings in ISO 8601 format. For example,
     2023-11-05T11:15:00Z corresponds to the 11:15am ("Zulu" time, aka UTC) on 5th
-    November 2023.
-    """
+    November 2023."""
     lessons = {}
     for event in events:
         event_title = event["summary"]
@@ -92,6 +95,9 @@ def process_events(events, student_data):
 
         if attendees:
             student_name = attendee_match(attendees, student_data)
+        elif "PMT" in event_title:
+            # print(f"PMT event: {event_title}")
+            continue
         elif event_title.startswith("Tutoring "):
             student_name = event_title.split("Tutoring ")[1].strip()
         else:
@@ -102,12 +108,19 @@ def process_events(events, student_data):
         end = event["end"].get("dateTime", event["end"].get("date"))
 
         if student_name not in lessons:
-            lessons[student_name] = {
-                "start": [], 
-                "end": [], 
-                "rate": student_data[student_name]["rate"], 
-                "client_type": student_data[student_name]["client_type"]
-            }
+            try:
+                rate = student_data[student_name]["rate"]
+                client_type = student_data[student_name]["client_type"]
+                lessons[student_name] = {
+                    "start": [], 
+                    "end": [], 
+                    "rate": rate,
+                    "client_type": client_type
+                }
+            except KeyError:
+                print(f"KeyError with student_name: {student_name}. Likely not " \
+                      "added to 'students.json'."
+                )
 
         lessons[student_name]["start"].append(start)
         lessons[student_name]["end"].append(end)
