@@ -21,10 +21,10 @@ def format_24h_time(t):
 
     if isinstance(t, np.datetime64):
         t = t.astype("datetime64[ms]").astype(datetime).replace(tzinfo=pytz.utc)
-    
+
     tz = pytz.timezone("Europe/London")
     local_time = t.astimezone(tz)
-    
+
     return local_time.strftime("%H:%M")
 
 
@@ -84,7 +84,6 @@ def write_invoices(output_dir, lessons, start_date, end_date):
     invoice_period = get_invoice_period(start_date, end_date)
 
     agency_html = {}
-    
     for student, lesson_info in lessons.items():
         start_times = np.array(
             [s.rstrip("Z") for s in lesson_info["start"]], dtype="datetime64"
@@ -104,9 +103,9 @@ def write_invoices(output_dir, lessons, start_date, end_date):
             rate=lesson_info["rate"],
             total_charge=total_charge,
         )
-        
+
         client_type = lesson_info["client_type"]
-        
+
         if client_type == "private":
             html = HTML(string=rendered_html)
             filename = f"{student.lower()}-invoice.pdf".replace(" ", "-")
@@ -114,8 +113,8 @@ def write_invoices(output_dir, lessons, start_date, end_date):
         else:
             if client_type not in agency_html:
                 agency_html[client_type] = []
-            agency_html[client_type].append(rendered_html)            
-    
+            agency_html[client_type].append(rendered_html)
+
     for agency, pages in agency_html.items():
         combined_html = "<html><body>"
         for page in pages:

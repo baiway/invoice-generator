@@ -1,4 +1,3 @@
-import json
 import datetime
 
 def get_user_choice():
