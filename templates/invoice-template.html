@@ -6,30 +6,81 @@
 </head>
 <body>
     <h1>{{ student }} invoice for {{ invoice_period }}</h1>
-    <h2>Sessions</h2>
-    <table>
-        {% for start, end, length in timings %}
-        <tr>
-            <td>{{ start | british_date }}</td>
-            <td>{{ start | time_24h }} until {{ end | time_24h }} ({{ length | hours_minutes }})</td>
-        </tr>
-        {% endfor %}
-    </table>
+    <div class="container">
+        <!-- Left Side -->
+        <div class="lesson-details">
+            <h2>Sessions</h2>
+            <table class="sessions">
+                {% for start, end, length in timings %}
+                <tr>
+                    <td>{{ start | british_date }}</td>
+                    <td>{{ start | time_24h }} until {{ end | time_24h }} ({{ length | hours_minutes }})</td>
+                </tr>
+                {% endfor %}
+            </table>
 
-    <table class="aggregates">
-        <tr>
-            <td>Total time</td>
-            <td>{{ total_hours | hours_minutes }}</td>
-        </tr>
-        <tr>
-            <td>Rate</td>
-            <td>£{{ rate }}/hour</td>
-        </tr>
-        <tr class="money-owed">
-            <td>Money owed</td>
-            <td>{{ total_charge | currency }}</td>
-        </tr>
-    </table>
+            <table class="aggregates">
+                <tr>
+                    <td>Total time</td>
+                    <td>{{ total_hours | hours_minutes }}</td>
+                </tr>
+                <tr>
+                    <td>Rate</td>
+                    <td>£{{ rate }}/hour</td>
+                </tr>
+                <tr class="money-owed">
+                    <td>Amount owed</td>
+                    <td>{{ total_charge | currency }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Right Side -->
+        {% if deets %}
+        <div class="payment-details">
+            <h2>Payment</h2>
+            <div class="qr-code">
+                <img src="{{ QR_code }}" alt="QR code linking to payment page.">
+            </div>
+            
+            <div class="payment-link">
+                <p><a href="{{ link }}">Pay via Monzo</a></p>
+            </div>
+
+            <table class="bank-details">
+                <tr>
+                    <td>Name:</td>
+                    <td>{{ name }}</td>
+                </tr>
+                <tr>
+                    <td>Sort code:</td>
+                    <td>{{ sort_code }}</td>
+                </tr>
+                <tr>
+                    <td>Account no:</td>
+                    <td>{{ account_number }}</td>
+                </tr>
+                <tr>
+                    <td>Bank:</td>
+                    <td>{{ bank }}</td>
+                </tr>
+            </table>
+
+            <table class="contact-details">
+                <tr>
+                    <td>Mobile:</td>
+                    <td>{{ mobile }}</td>
+                </tr>
+                <tr>
+                    <td>Email:</td>
+                    <td><a href="mailto:{{ email }}">{{ email }}</a></td>
+                </tr>
+            </table>
+            
+        </div>
+        {% endif %}
+    </div>
+    <div class="page-break"></div>
 </body>
 </html>
 

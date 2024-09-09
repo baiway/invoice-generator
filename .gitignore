@@ -1,6 +1,8 @@
 credentials.json
 token.json
 students.json
+bank_details.json
+contact_details.json
 __pycache__
 .venv
 invoices

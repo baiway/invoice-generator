@@ -1,5 +1,5 @@
 body {
-  font-family: 'Helvetica', 'Arial', sans-serif;
+  font-family: "Helvetica", "Arial", sans-serif;
 }
 
 h1 {
@@ -12,43 +12,108 @@ h2 {
   margin-top: 30px;
 }
 
+img {
+  width: 60%;
+  height: auto;
+}
+
 table {
   border-collapse: separate;
   border-spacing: 0;
   margin-top: 20px;
-  width: auto;
-  border: 1px solid #c6c6c6;
-  border-radius: 10px;
-}
-
-td {
-  border: 1px solid #c6c6c6;
-  text-align: left;
-  padding: 10px;
-}
-
-/* Apply border-radius to the top left and right corners of the first row */
-tr:first-child td:first-child {
-  border-top-left-radius: 10px;
-}
-
-tr:first-child td:last-child {
-  border-top-right-radius: 10px;
-}
-
-/* Apply border-radius to the bottom left and right corners of the last row */
-tr:last-child td:first-child {
-  border-bottom-left-radius: 10px;
-}
-
-tr:last-child td:last-child {
-  border-bottom-right-radius: 10px;
-}
-
-.aggregates {
   margin-bottom: 20px;
+  width: auto;
+  border-radius: 10px;
+  border: 2px solid #c6c6c6;
 }
 
+/* Add padding to table cells */
+td, th {
+  padding: 5px 10px 5px 10px;
+}
+
+/* Apply a border to the right of all but the last column */
+th:not(:last-child), td:not(:last-child) {
+  border-right: 2px solid #c6c6c6;
+}
+
+/* Apply a border to the bottom of all but the last row */
+thead tr:not(:last-child) th,
+thead tr:not(:last-child) td,
+tbody tr:not(:last-child) th,
+tbody tr:not(:last-child) td,
+tfoot tr:not(:last-child) th,
+tfoot tr:not(:last-child) td,
+tr:not(:last-child) td,
+tr:not(:last-child) th {
+  border-bottom: 2px solid #c6c6c6;
+}
+
+/* Aggregates table */
+.aggregates {
+  margin-top: 20px;
+}
+
+/* Flex container for splitting the page into two columns */
+.container {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+/* Left column (sessions and aggregates) */
+.lesson-details {
+  width: 60%;
+}
+
+/* Right column (QR code, payment link, bank details) */
+.payment-details {
+  width: 40%;
+  text-align: center;
+  position: relative;
+}
+
+/* Vertical line (border) between the left and right sides */
+.payment-details::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -10px; /* Adjust this to position the line */
+    width: 2px;
+    height: 100%;
+    background-color: #c6c6c6;
+}
+
+/* Bank details table without borders */
+.bank-details, .contact-details {
+  margin: 0 auto;
+  text-align: left;
+  border: none;
+  width: auto;
+}
+
+.contact-details {
+  margin-top: 30px;
+}
+
+.bank-details td, .contact-details td {
+  padding: 5px;
+  text-align: left;
+  border-style : hidden!important;
+}
+
+/* QR code image styling */
+.qr-code {
+  margin-top: 20px;
+}
+
+/* Bold style for the amount owed */
 .money-owed {
   font-weight: bold;
 }
+
+/* Page break for printing */
+.page-break {
+  page-break-after: always;
+}
+
