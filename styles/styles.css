@@ -63,12 +63,12 @@ tr:not(:last-child) th {
 
 /* Left column (sessions and aggregates) */
 .lesson-details {
-  width: 60%;
+  width: 65%;
 }
 
 /* Right column (QR code, payment link, bank details) */
 .payment-details {
-  width: 40%;
+  width: 35%;
   text-align: center;
   position: relative;
 }

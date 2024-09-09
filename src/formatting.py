@@ -24,10 +24,10 @@ def format_hours_minutes(dt: timedelta) -> str:
     minutes = (total_seconds % 3600) // 60
 
     hour_str = "hour" if hours == 1 else "hours"
-    minute_str = "minute" if minutes == 1 else "minutes"
+    minute_str = "minute" if minutes == 1 else "mins"
 
     if hours and minutes:
-        return f"{hours} {hour_str}, {minutes} {minute_str}"
+        return f"{hours} {hour_str} {minutes} {minute_str}"
     elif hours:
         return f"{hours} {hour_str}"
     elif minutes:
