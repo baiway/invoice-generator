@@ -1,9 +1,11 @@
 import logging
 import pandas as pd
+import calendar
 from datetime import datetime, timedelta
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML, CSS
+from typing import Any
 from src.formatting import (
     format_british_date,
     format_24h_time,
@@ -14,15 +16,23 @@ from src.formatting import (
 # Suppress warnings from fontTools
 logging.basicConfig(level=logging.ERROR)
 
-def get_invoice_period(start_date, end_date):
-    """Determines whether the invoice period is displayed as the last month
-    (e.g. 'June') or a date interval (e.g. 01/01/2023 to 05/05/2023)
+def get_invoice_period(
+    start_date: datetime,
+    end_date: datetime
+) -> str:
+    """Returns a string displayed in the invoice title. If the invoice
+    covers a full month (e.g. from 1st June to 30th June, inclusive)
+    then this returns the month and year (e.g. "June 2024"). If not,
+    this returns the invoice period in dd/mm/yyyy format (e.g.
+    06/04/2024 to 05/04/2025). The latter is useful for short bursts of
+    tutoring, longer stints (e.g. summer holiday revision where only
+    one invoice is issued), or for tax purposes.
     """
-    next_month = start_date.replace(day=28) + timedelta(days=4)
-    last_day_of_month = next_month - timedelta(days=next_month.day)
+    # Get the last day of the month for `start_date`
+    _, last_day = calendar.monthrange(start_date.year, start_date.month)
 
-    if (start_date.day == 1) and (end_date == last_day_of_month):
-        return start_date.strftime("%B")  # covers whole month
+    if (start_date.day == 1) and (end_date.day == last_day):
+        return start_date.strftime("%B %Y")  # covers whole month
     else:
         formatted_start_date = start_date.strftime("%d/%m/%Y")
         formatted_end_date = end_date.strftime("%d/%m/%Y")
@@ -120,7 +130,15 @@ def write_invoices(
         filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
         html.write_pdf(output_dir / filename, stylesheets=[css])
 
-def print_inactive_students(lessons, student_data):
+def print_inactive_students(
+    lessons: pd.DataFrame,
+    student_data: dict[str, Any]
+) -> None:
+    """Prints a list of students not seen in the provided invoice
+    period (to prompt the user to contact them).
+    """
+    students_seen = lessons["student"].unique()
+
     for student in student_data:
-        if student not in lessons:
+        if student not in students_seen:
             print(f"  {student} not seen in this period.")
