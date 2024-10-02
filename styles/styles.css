@@ -2,6 +2,7 @@
 @page {
   size: A4;
   margin: 50px;
+  background-color: #f1f8f3;
 }
 
 /* Remove padding, apply a sans-serif font,
@@ -9,7 +10,6 @@ set background colour, and ensure proper box-sizing */
 html, body {
   padding: 0;
   font-family: "Helvetica", "Arial", sans-serif;
-  background-color: #f1f8f3;
   box-sizing: border-box;
 }
 
