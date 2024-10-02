@@ -1,32 +1,37 @@
+/* Set A4 page size and define margin for printed document */
 @page {
-    size: A4;
-    margin: 0;
+  size: A4;
+  margin: 50px;
 }
 
+/* Remove padding, apply a sans-serif font,
+set background colour, and ensure proper box-sizing */
 html, body {
-  height: 100%;
-  margin: 50px;
   padding: 0;
   font-family: "Helvetica", "Arial", sans-serif;
   background-color: #f1f8f3;
   box-sizing: border-box;
 }
 
+/* Styling for the main invoice heading (e.g. "Alice invoice for September") */
 h1 {
   color: #333;
   font-size: 24px;
 }
 
+/* Styling for "Sessions" and "Payment" headings */
 h2 {
   font-size: 20px;
   margin-top: 30px;
 }
 
+/* Scale QR code size while maintaining aspect ratio*/
 img {
   width: 60%;
   height: auto;
 }
 
+/* Remove gaps between cells, apply margins, and set border styling */
 table {
   border-collapse: separate;
   border-spacing: 0;
@@ -37,50 +42,78 @@ table {
   border: 2px solid #c6c6c6;
 }
 
-/* Add padding to table cells */
+/* Add padding to table cells to improve readability */
 td, th {
-  padding: 5px 10px 5px 10px;
+  padding: 5px 10px;
 }
 
-/* Apply a border to the right of all but the last column */
+/* Apply a straight right border to all cells except those in the 
+right-most column (which remains rounded; see `table`) */
 th:not(:last-child), td:not(:last-child) {
   border-right: 2px solid #c6c6c6;
 }
 
-/* Apply a border to the bottom of all but the last row */
-thead tr:not(:last-child) th,
-thead tr:not(:last-child) td,
-tbody tr:not(:last-child) th,
-tbody tr:not(:last-child) td,
-tfoot tr:not(:last-child) th,
-tfoot tr:not(:last-child) td,
-tr:not(:last-child) td,
-tr:not(:last-child) th {
+/* Apply a straight bottom border to all cells except those in the
+bottom row (which remain rounded; see `table`) */
+tr:not(:last-child) td, tr:not(:last-child) th {
   border-bottom: 2px solid #c6c6c6;
 }
 
-/* Aggregates table */
-.aggregates {
-  margin-top: 20px;
+/* Floated container for splitting the page into two columns. */
+.container {
+  margin-top: 50px;
+  width: 100%;
 }
 
-/* Flex container for splitting the page into two columns */
-.container {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
+/* Page break for printing */
+.page-break {
+  page-break-before: always;
+}
+
+/* Clear floats */
+.clearfix::after {
+  content: "";
+  display: block;
+  clear: both;
 }
 
 /* Left column (sessions and aggregates) */
 .lesson-details {
-  width: 65%;
+  float: left;
+  width: 50%;
+}
+.aggregates {
+  margin-top: 20px;
+}
+.money-owed {
+  font-weight: bold;
 }
 
 /* Right column (QR code, payment link, bank details) */
 .payment-details {
-  width: 35%;
+  float: right;
+  width: 40%;
   text-align: center;
   position: relative;
+}
+/* Bank and contact details tables without borders */
+.bank-details, .contact-details {
+  margin: 0 auto;
+  text-align: left;
+  border: none;
+}
+.contact-details {
+  margin-top: 30px;
+}
+/* Remove borders from bank details table */
+.bank-details td, .contact-details td {
+  padding: 5px;
+  text-align: left;
+  border-style : hidden!important;
+}
+/* QR code image styling */
+.qr-code {
+  margin-top: 20px;
 }
 
 /* Vertical line (border) between the left and right sides */
@@ -88,42 +121,8 @@ tr:not(:last-child) th {
     content: "";
     position: absolute;
     top: 0;
-    left: -10px; /* Adjust this to position the line */
+    left: -10px;
     width: 2px;
     height: 100%;
     background-color: #c6c6c6;
 }
-
-/* Bank details table without borders */
-.bank-details, .contact-details {
-  margin: 0 auto;
-  text-align: left;
-  border: none;
-  width: auto;
-}
-
-.contact-details {
-  margin-top: 30px;
-}
-
-.bank-details td, .contact-details td {
-  padding: 5px;
-  text-align: left;
-  border-style : hidden!important;
-}
-
-/* QR code image styling */
-.qr-code {
-  margin-top: 20px;
-}
-
-/* Bold style for the amount owed */
-.money-owed {
-  font-weight: bold;
-}
-
-/* Page break for printing */
-.page-break {
-  page-break-after: always;
-}
-

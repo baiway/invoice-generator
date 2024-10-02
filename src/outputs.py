@@ -1,10 +1,11 @@
 import logging
 import pandas as pd
 import calendar
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML, CSS
+from bs4 import BeautifulSoup
 from typing import Any
 from src.formatting import (
     format_british_date,
@@ -37,6 +38,13 @@ def get_invoice_period(
         formatted_start_date = start_date.strftime("%d/%m/%Y")
         formatted_end_date = end_date.strftime("%d/%m/%Y")
         return f"{formatted_start_date} to {formatted_end_date}"
+
+
+def extract_page_content(rendered_html: str) -> str:
+    """Extract the content inside the <div class="container">."""
+    soup = BeautifulSoup(rendered_html, "html.parser")
+    content = soup.find("div", class_="container")
+    return str(content)
 
 
 def write_invoices(
@@ -115,18 +123,35 @@ def write_invoices(
             filename = f"{str(student).lower()}-invoice.pdf".replace(" ", "-")
             html.write_pdf(output_dir / filename, stylesheets=[css])
         else:
+            # Extract the content inside the <div class="container">
+            page_content = extract_page_content(rendered_html)
             if client_type not in agency_html:
                 agency_html[client_type] = []
-            agency_html[client_type].append(rendered_html)
+            agency_html[client_type].append(page_content + "\n\t")
 
-    # Write agency invoices
+    # Define outer HTML for agency invoices (this was removed by the above)
+    # `extract_page_content` call to avoid duplicating the <html>, <head>, etc.
+    # tags in the template if you see multiple students from the same agency
+    outer_html = (
+        "<!DOCTYPE html>\n"
+        "<html>\n"
+        "<head lang='en'>\n"
+        "  <meta charset='UTF-8'>\n"
+        "</head>\n"
+        "<body>\n"
+        "  {content}\n"
+        "<div class='clearfix'></div>"
+        "</body>\n"
+        "</html>\n"
+    )
+
+    # Write agency invoices; if you see multiple students from the same agency,
+    # the sessions for each student will be printed on a separate page
     for agency, pages in agency_html.items():
-        combined_html = "<html><body>"
+        invoices = ""
         for page in pages:
-            combined_html += page
-        combined_html += "</body></html>"
-
-        html = HTML(string=combined_html)
+             invoices += page
+        html = HTML(string=outer_html.format(content=invoices))
         filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
         html.write_pdf(output_dir / filename, stylesheets=[css])
 
