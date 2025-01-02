@@ -1,5 +1,6 @@
 import json
 import argparse
+from rich_argparse import RichHelpFormatter
 from datetime import datetime
 from pathlib import Path
 from src.api import authenticate, fetch_events, process_events
@@ -9,6 +10,13 @@ from typing import List, Tuple
 
 def parse_args() -> argparse.Namespace:
     """Parses command line arguments"""
+
+    def formatter(prog: str) -> RichHelpFormatter:
+        """Adjust `max_help_position` so the description of
+        `--only ONLY [ONLY ...]` does not break onto the next line.
+        See: https://stackoverflow.com/questions/5462873/"""
+        return RichHelpFormatter(prog, max_help_position=27)
+
     parser = argparse.ArgumentParser(
         description=(
             "Generates PDF invoices by cross-referencing Google Calendar "
@@ -16,7 +24,8 @@ def parse_args() -> argparse.Namespace:
             "script generates invoices for all students for the last full "
             "month. To change this, use the `--only`, `--from` and `--to` "
             "flags."
-        )
+        ),
+        formatter_class=formatter
     )
     parser.add_argument(
         "--only",
