@@ -5,8 +5,6 @@ Generates invoices from Google Calendar events by matching attendee email addres
 ### Requirements
 - [Python 3](https://python.org/): to check whether you have Python 3 installed, type `python --version` into your terminal (or PowerShell on Windows). If Python is not installed, you can download it from [python.org/downloads](https://python.org/downloads/). You can find some concise guidance for installing Python [here](https://github.com/baiway/MScFE_python_refresher/blob/72b13a0eec7e3b9e2987c6c17a0fd6c839758c7b/docs/installing-python.md).
 - Google Calendar API credentials (instructions below)
-
-### Recommendations
 - A very simple naming scheme for your Google Calendar events. All of mine are called something like "Tutoring Joe Bloggs", which makes this sort of automation possible. If you do not have a consistent naming convention for your Google Calendar, you're going to run into problems.
 
 ### Setting up Google Calendar API credentials
@@ -14,7 +12,7 @@ Generates invoices from Google Calendar events by matching attendee email addres
 2. Enable the Google Calendar API for your project.
 3. In the "Credentials" section, create a new OAuth client ID. If prompted, configure the OAuth consent screen with the necessary details.
 4. Set the application type to "Desktop app" and name your client.
-5. Download the JSON file containing your credentials, rename it to `credentials.json`.
+5. Download the JSON file containing your credentials, rename it `credentials.json`.
 
 For detailed steps, refer to the [official Google Calendar API documentation](https://developers.google.com/calendar/quickstart/python).
 
@@ -85,7 +83,7 @@ mkdir data
 }
 ```
 
-`contact_details.json`:
+`contact_details.json`: Replace the mobile number and email address with your details.
 ```json
 {
   "mobile": "07803 293571",
@@ -105,6 +103,3 @@ python generate-invoices.py --help
 ```
 
 If the script runs successfully, invoices will be generated in the `invoices` folder.
-
-## To-do:
-- Add ChatGPT support for the above so a report can be generated based on some minimal prompts (e.g. "worked through exam questios on quadratic inequalities", "introduced quadratic simultaneous equations", "more practice is needed if they are to achieve their target grade", etc.)
