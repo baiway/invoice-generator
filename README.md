@@ -3,9 +3,9 @@ Generates invoices from Google Calendar events by matching attendee email addres
 
 ## Getting started
 ### Requirements
-- [Python 3](https://python.org/): to check whether you have Python 3 installed, type `python --version` into your terminal (or PowerShell on Windows). If Python is not installed, you can download it from [python.org/downloads](https://python.org/downloads/). You can find some concise guidance for installing Python [here](https://github.com/baiway/MScFE_python_refresher/blob/72b13a0eec7e3b9e2987c6c17a0fd6c839758c7b/docs/installing-python.md).
+- [Python 3](https://python.org/): to check whether you have Python 3 installed, type `python3 --version` into your terminal (or type `py --version` into PowerShell on Windows). If Python is not installed, you can download it from [python.org/downloads](https://python.org/downloads/).
 - Google Calendar API credentials (instructions below)
-- A very simple naming scheme for your Google Calendar events. All of mine are called something like "Tutoring Joe Bloggs", which makes this sort of automation possible. If you do not have a consistent naming convention for your Google Calendar, you're going to run into problems.
+- A simple naming scheme for your Google Calendar events. All of mine are called something like "Tutoring Joe Bloggs", which makes this sort of automation possible. If you do not have a consistent naming convention for your Google Calendar, you're going to run into problems.
 
 ### Setting up Google Calendar API credentials
 1. Visit the [Google Developers Console](https://console.developers.google.com/) and create a new project.
