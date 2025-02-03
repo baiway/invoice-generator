@@ -67,8 +67,8 @@ def write_invoices(
     env.filters["time_24h"] = format_24h_time
     env.filters["hours_minutes"] = format_hours_minutes
     env.filters["currency"] = format_currency
-    template = env.get_template("templates/invoice-template.html")
-    css = CSS("styles/styles.css")
+    template = env.get_template("template/invoice-template.html")
+    css = CSS("template/styles.css")
 
     invoice_period = get_invoice_period(start_date, end_date)
 
