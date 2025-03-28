@@ -48,7 +48,12 @@ pip install -r requirements.txt
 mkdir data
 ```
 
-**2. Create three files in the `data` directory:** `students.json`, `bank_details.json`, and `contact_details.json`. Examples of each are shown below.
+**2. Move `credentials.json` into the `data` directory**
+```shell
+mv ~/Downloads/credentials.json ./data
+```
+
+**3. Create three files in the `data` directory:** `students.json`, `bank_details.json`, and `contact_details.json`. Examples of each are shown below.
 
 `students.json`:
 ```json
