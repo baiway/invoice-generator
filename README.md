@@ -108,3 +108,6 @@ python generate-invoices.py --help
 ```
 
 If the script runs successfully, invoices will be generated in the `invoices` folder.
+
+## Potential issues
+If you experience issues with `weasyprint`, see: [gobject-2.0-0 not able to load on macbook](https://stackoverflow.com/questions/69097224/gobject-2-0-0-not-able-to-load-on-macbook/69295303#69295303) on Stack Overflow.
