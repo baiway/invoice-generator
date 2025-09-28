@@ -1,21 +1,13 @@
 import json
 import argparse
-from rich_argparse import RichHelpFormatter
 from datetime import datetime
 from pathlib import Path
 from src.api import authenticate, fetch_events, process_events
 from src.utils import get_last_full_month
 from src.outputs import write_invoices, print_inactive_students
-from typing import List, Tuple
 
 def parse_args() -> argparse.Namespace:
     """Parses command line arguments"""
-
-    def formatter(prog: str) -> RichHelpFormatter:
-        """Adjust `max_help_position` so the description of
-        `--only ONLY [ONLY ...]` does not break onto the next line.
-        See: https://stackoverflow.com/questions/5462873/"""
-        return RichHelpFormatter(prog, max_help_position=27)
 
     parser = argparse.ArgumentParser(
         description=(
@@ -25,12 +17,14 @@ def parse_args() -> argparse.Namespace:
             "month. To change this, use the `--only`, `--from` and `--to` "
             "flags."
         ),
-        formatter_class=formatter
+        formatter_class=argparse.MetavarTypeHelpFormatter
     )
     parser.add_argument(
         "--only",
         nargs="+",
+        type=list,
         default=[],
+        metavar="student",
         help=(
             "Case-sensitive list of student names for which invoices will be "
             "generated. Must match the names in `students.json`. If not "
@@ -40,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--from",
-        dest="start_date",
+        dest="start",
         type=str,
         help=(
             "Start of the invoice period in YYYY-MM-DD format. If not "
@@ -53,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--to",
-        dest="end_date",
+        dest="end",
         type=str,
         help=(
             "End of the invoice period in YYYY-MM-DD format (e.g. "
@@ -67,7 +61,7 @@ def parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-def validate_students(student_list: List[str]) -> List[str]:
+def validate_students(student_list: list[str]) -> list[str]:
     """Validates student names supplied via the CLI using the `--only`
     flag. If `student_list` is empty (i.e. `--only` not used), simply
     returns `student_list` as invoices will be generated for all
@@ -94,7 +88,7 @@ def validate_students(student_list: List[str]) -> List[str]:
         return student_list
 
 
-def validate_invoice_period(start: str, end: str) -> Tuple[datetime, datetime]:
+def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
     """Validates the invoice period supplied via the CLI and return the
     specified dates as datetime objects. If `--to` is specified without
     `--from`, raises a ValueError. If only `--from` is provided, `--to`
@@ -114,12 +108,11 @@ def validate_invoice_period(start: str, end: str) -> Tuple[datetime, datetime]:
         start_date = datetime.strptime(start, "%Y-%m-%d")
         end_date = datetime.strptime(end, "%Y-%m-%d")
         end_date = end_date.replace(hour=23, minute=59, second=59)
-    except ValueError as e:
-        raise ValueError("Invalid date format. Must be in YYYY-MM-DD format.") from e
+    except ValueError:
+        raise ValueError("Invalid date format. Must be in YYYY-MM-DD format.")
 
     if start_date > end_date:
         raise ValueError("`--from` date cannot be later than the `--to` date.")
-
 
     return start_date, end_date
 
@@ -128,7 +121,7 @@ def main():
     # Parse and validate command line arguments
     args = parse_args()
     students_to_invoice = validate_students(args.only)
-    start_date, end_date = validate_invoice_period(args.start_date, args.end_date)
+    start_date, end_date = validate_invoice_period(args.start, args.end)
 
     # Load `students.json`, `bank_details.json` and `contact_details.json`
     with open("data/students.json", "r") as f:
@@ -145,13 +138,14 @@ def main():
     events = fetch_events(service, start_date, end_date)
 
     # Matches Google Calendar events to students listed in `students.json`,
-    # producing a Pandas DataFrame with the following structure:
+    # producing a `pandas.DataFrame` with the following structure:
     #
     # student |    start (datetime)    |     end (datetime)     | rate | client_type
     # ------------------------------------------------------------------------------
     #  Alice  | 2024-09-08 11:00:00+00 | 2024-09-08 12:00:00+00 |  50  |   private
     #  Bob    | 2024-09-08 14:00:00+00 | 2024-09-08 15:00:00+00 |  40  |   agency
-    lessons = process_events(events, student_data, students_to_invoice)
+    lessons = process_events(events, student_data, students_to_invoice,
+                             contact_details)
 
     # If `--only` is not specified (user is generating invoices for all
     # students seen in the invoice period), print a list of inactive students

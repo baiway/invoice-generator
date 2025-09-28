@@ -5,7 +5,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build, Resource
 from datetime import datetime
-from typing import List, Dict, Any, Union
 
 def authenticate() -> Resource:
     """Authenticate using Google's API. Expects `credentials.json` in
@@ -36,18 +35,18 @@ def authenticate() -> Resource:
 
 
 def fetch_events(
-    service: Any,
+    service: Resource,
     start_date: datetime,
     end_date: datetime
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, str]]:
     """Fetch all Google Calendar events between a specified start and
     end date. Requires a Google Calendar service object and date
     range. Returns a list of events.
     """
-    print(f"Fetching events from {start_date.strftime("%d %B %Y")} to "
-          f"{end_date.strftime("%d %B %Y")}...")
+    print(f"Fetching events from {start_date.strftime('%d %B %Y')} to "
+          f"{end_date.strftime('%d %B %Y')}...")
     events_result = (
-        service.events()
+        service.events()  # type: ignore[attr-defined]
         .list(
             calendarId="primary",
             timeMin=start_date.isoformat() + "Z",
@@ -61,9 +60,9 @@ def fetch_events(
 
 
 def attendee_match(
-    attendees: List[Any],
-    student_data: Dict[str, Dict[str, Union[int, float, str]]]
-) -> Union[str, None]:
+    attendees: list[dict],
+    student_data: dict[str, dict],
+) -> str:
     """Attempts to match Google Calendar attendees with email address
     in `students.json`.
     """
@@ -73,13 +72,14 @@ def attendee_match(
             if email in info["emails"]:
                 return student_name
     print("attendees not found in 'students.json': ", attendees)
-    return None
+    return ""
 
 
 def process_events(
-    events: List[Dict[str, Any]],
-    student_data: Dict[str, Dict[str, Union[int, float, str]]],
-    students_to_invoice: List[str]
+    events: list[dict],
+    student_data: dict[str, dict],
+    students_to_invoice: list[str],
+    contact_details: dict[str, str]
 ) -> pd.DataFrame:
     """Matches Google Calendar events to students listed in
     `students.json` based on attendee email addresses and stores the
@@ -107,6 +107,7 @@ def process_events(
     for example, you may have just forgotten to add a new student's
     details to `students.json`.
     """
+    my_email = contact_details["email"]
     lessons = []
 
     for event in events:
@@ -114,25 +115,34 @@ def process_events(
         attendees = event.get("attendees", [])
         student_name = None
 
+        # Check whether anyone else is included on the Google Calendar event
+        # if not, it's either a PMT or Blue Education event that has been
+        # sent to me only.
+        just_me = all(attendee.get("self", False) for attendee in attendees)
+
         # Attempt to extract `student_name`
-        if attendees:
+        if not just_me: # attempt to match by email
             student_name = attendee_match(attendees, student_data)
-        elif "PMT" in event_title: # ignore these (invoices handled by PMT)
+        elif "PMT" in event_title: # ignore these (payment handled by PMT)
             continue
-        elif event_title.startswith("Tutoring "):
+        elif "BAC" in event_title: # Blue Education invites start w/ `student_name`
+            print(f"Detected: {event_title}")
+            student_name = event_title.split()[0].strip()
+        elif event_title.startswith("Tutoring "): # likely an in-person job
             student_name = event_title.split("Tutoring ")[1].strip()
         else:
             print(f"Skipping event with unexpected format: '{event_title}'")
             continue
 
-        # Skip event if no name match by this point
+        # If `student_name` is still None-like, then skip to next student
         if not student_name:
             print(f"Could not extract `student_name` from '{event_title}`. " \
                   "Skipping event.")
             continue
 
-        # Skip event if student is not in students_to_invoice
-        if students_to_invoice and student_name not in students_to_invoice:
+        # Skip event if student is not in `students_to_invoice`. This is only
+        # used when the `--only` argument is used.
+        if (students_to_invoice) and (student_name not in students_to_invoice):
             continue
 
         # Handle missing student in `student_data` or KeyError
