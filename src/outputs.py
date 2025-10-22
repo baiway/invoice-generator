@@ -91,7 +91,7 @@ def write_invoices(
         total_charge = (total_hours / pd.Timedelta(hours=1)) * rate
 
         # Only include bank details for private clients, not agencies
-        deets = (client_type == "private")
+        deets = True # always include payment information
 
         # Generate QR code and payment link dynamically based on amount owed
         QR_code = bank_details["QR_code"].replace("amt", str(int(total_charge * 100)))
