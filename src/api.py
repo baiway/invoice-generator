@@ -127,7 +127,7 @@ def process_events(
             continue
         elif "BAC" in event_title: # Blue Education invites start w/ `student_name`
             print(f"Detected: {event_title}")
-            student_name = event_title.split()[0].strip()
+            student_name = " ".join(event_title.split()[0:2])
         elif event_title.startswith("Tutoring "): # likely an in-person job
             student_name = event_title.split("Tutoring ")[1].strip()
         else:
