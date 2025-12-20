@@ -22,7 +22,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--only",
         nargs="+",
-        type=list,
         default=[],
         metavar="student",
         help=(
