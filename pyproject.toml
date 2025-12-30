@@ -1,0 +1,75 @@
+[project]
+name = "invoice-generator"
+version = "0.1.0"
+description = "Generate PDF invoices from Google Calendar events"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "beautifulsoup4==4.12.3",
+    "google-api-core==2.19.2",
+    "google-api-python-client==2.144.0",
+    "google-auth==2.34.0",
+    "google-auth-httplib2==0.2.0",
+    "google-auth-oauthlib==1.2.1",
+    "jinja2==3.1.4",
+    "pandas==2.2.2",
+    "pydantic>=2.0",
+    "python-dateutil==2.9.0.post0",
+    "rich==13.9.4",
+    "rich-argparse==1.6.0",
+    "weasyprint==62.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.8.0",
+    "pandas-stubs>=2.1.0",
+    "types-beautifulsoup4",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.8.0",
+    "pandas-stubs>=2.1.0",
+    "types-beautifulsoup4",
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+
+[[tool.mypy.overrides]]
+module = [
+    "google.*",
+    "googleapiclient.*",
+    "weasyprint.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -2,9 +2,16 @@ import json
 import argparse
 from datetime import datetime
 from pathlib import Path
+from pydantic import ValidationError
+
 from src.api import authenticate, fetch_events, process_events
 from src.utils import get_last_full_month
 from src.outputs import write_invoices, print_inactive_students
+from src.validation import load_student_data, load_bank_details, load_contact_details
+from src.logging_config import setup_logging, get_logger
+from src.constants import OUTPUT_DIR
+
+logger = get_logger(__name__)
 
 def parse_args() -> argparse.Namespace:
     """Parses command line arguments"""
@@ -116,22 +123,37 @@ def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
     return start_date, end_date
 
 
-def main():
+def main() -> None:
+    # Set up logging first
+    setup_logging()
+
     # Parse and validate command line arguments
     args = parse_args()
     students_to_invoice = validate_students(args.only)
     start_date, end_date = validate_invoice_period(args.start, args.end)
 
-    # Load `students.json`, `bank_details.json` and `contact_details.json`
-    with open("data/students.json", "r") as f:
-        student_data = json.load(f)
-    with open("data/bank_details.json", "r") as f:
-        bank_details = json.load(f)
-    with open("data/contact_details.json", "r") as f:
-        contact_details = json.load(f)
+    # Load and validate JSON data files
+    logger.info("Loading configuration files...")
+    try:
+        student_data_dict = load_student_data()
+        bank_details_model = load_bank_details()
+        contact_details_model = load_contact_details()
+
+        # Convert Pydantic models to dicts for compatibility with existing code
+        student_data = {name: info.model_dump() for name, info in student_data_dict.items()}
+        bank_details = bank_details_model.model_dump()
+        contact_details = contact_details_model.model_dump()
+    except (FileNotFoundError, json.JSONDecodeError, ValidationError) as e:
+        logger.error(f"Configuration error: {e}")
+        return
 
     # Authenticate Google Calendar
-    service = authenticate()
+    logger.info("Authenticating with Google Calendar...")
+    try:
+        service = authenticate()
+    except FileNotFoundError as e:
+        logger.error(str(e))
+        return
 
     # Fetch all Google Calendar events over the invoice period
     events = fetch_events(service, start_date, end_date)
@@ -153,11 +175,14 @@ def main():
         print_inactive_students(lessons, student_data)
 
     # Write invoices
-    output_dir = Path("./invoices")
+    output_dir = Path(OUTPUT_DIR)
     if not output_dir.exists():
-        output_dir.mkdir()
+        output_dir.mkdir(parents=True)
+
+    logger.info("Generating invoices...")
     write_invoices(output_dir, lessons, start_date, end_date, bank_details, contact_details)
-    print(f"Invoices saved here: {output_dir.resolve()}")
+
+    logger.info(f"Invoices saved to: {output_dir.resolve()}")
 
 if __name__ == "__main__":
     main()

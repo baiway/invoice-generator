@@ -1,4 +1,3 @@
-import logging
 import pandas as pd
 import calendar
 from datetime import datetime
@@ -7,15 +6,17 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML, CSS
 from bs4 import BeautifulSoup
 from typing import Any
+
 from src.formatting import (
     format_british_date,
     format_24h_time,
     format_hours_minutes,
     format_currency
 )
+from src.constants import CLIENT_TYPE_PRIVATE, AMOUNT_PLACEHOLDER
+from src.logging_config import get_logger
 
-# Suppress warnings from fontTools
-logging.basicConfig(level=logging.ERROR)
+logger = get_logger(__name__)
 
 def get_invoice_period(
     start_date: datetime,
@@ -94,8 +95,8 @@ def write_invoices(
         deets = True # always include payment information
 
         # Generate QR code and payment link dynamically based on amount owed
-        QR_code = bank_details["QR_code"].replace("amt", str(int(total_charge * 100)))
-        link = bank_details["link"].replace("amt", str(total_charge))
+        QR_code = bank_details["QR_code"].replace(AMOUNT_PLACEHOLDER, str(int(total_charge * 100)))
+        link = bank_details["link"].replace(AMOUNT_PLACEHOLDER, str(total_charge))
 
         # Substitute lesson information into template HTML
         rendered_html = template.render(
@@ -118,10 +119,11 @@ def write_invoices(
 
         # Generate separate PDFs for private clients and collect agency
         # lessons to form a combined PDF later.
-        if client_type == "private":
+        if client_type == CLIENT_TYPE_PRIVATE:
             html = HTML(string=rendered_html)
             filename = f"{str(student).lower()}-invoice.pdf".replace(" ", "-")
             html.write_pdf(output_dir / filename, stylesheets=[css])
+            logger.info(f"Generated invoice for {student}")
         else:
             # Extract the content inside the <div class="container">
             page_content = extract_page_content(rendered_html)
@@ -154,6 +156,7 @@ def write_invoices(
         html = HTML(string=outer_html.format(content=invoices))
         filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
         html.write_pdf(output_dir / filename, stylesheets=[css])
+        logger.info(f"Generated combined invoice for {agency}")
 
 def print_inactive_students(
     lessons: pd.DataFrame,

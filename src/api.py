@@ -1,10 +1,22 @@
 import pandas as pd
 from pathlib import Path
+from typing import Any, Optional
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build, Resource
 from datetime import datetime
+
+from src.constants import (
+    CREDENTIALS_FILE,
+    TOKEN_FILE,
+    GOOGLE_CALENDAR_SCOPES,
+)
+from src.schema import classify_event, match_attendee_email
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 def authenticate() -> Resource:
     """Authenticate using Google's API. Expects `credentials.json` in
@@ -12,9 +24,9 @@ def authenticate() -> Resource:
     directory) for subsequent authentication. Returns a Google Calendar
     service object.
     """
-    credentials_path = Path("data/credentials.json")
-    token_path = Path("data/token.json")
-    SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+    credentials_path = Path(CREDENTIALS_FILE)
+    token_path = Path(TOKEN_FILE)
+    SCOPES = GOOGLE_CALENDAR_SCOPES
 
     if not Path(credentials_path).is_file():
         raise FileNotFoundError(f"credentials.json not found at `{credentials_path}`")
@@ -38,13 +50,13 @@ def fetch_events(
     service: Resource,
     start_date: datetime,
     end_date: datetime
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:  # FIX: was list[dict[str, str]], now correct
     """Fetch all Google Calendar events between a specified start and
     end date. Requires a Google Calendar service object and date
     range. Returns a list of events.
     """
-    print(f"Fetching events from {start_date.strftime('%d %B %Y')} to "
-          f"{end_date.strftime('%d %B %Y')}...")
+    logger.info(f"Fetching events from {start_date.strftime('%d %B %Y')} to "
+                f"{end_date.strftime('%d %B %Y')}")
     events_result = (
         service.events()  # type: ignore[attr-defined]
         .list(
@@ -60,24 +72,24 @@ def fetch_events(
 
 
 def attendee_match(
-    attendees: list[dict],
-    student_data: dict[str, dict],
+    attendees: list[dict[str, Any]],
+    student_data: dict[str, Any],
 ) -> str:
     """Attempts to match Google Calendar attendees with email address
     in `students.json`.
     """
-    for attendee in attendees:
-        email = attendee.get("email")
-        for student_name, info in student_data.items():
-            if email in info["emails"]:
-                return student_name
-    print("attendees not found in 'students.json': ", attendees)
+    student_name = match_attendee_email(attendees, student_data)
+
+    if student_name:
+        return student_name
+
+    logger.warning(f"Attendees not found in students.json: {attendees}")
     return ""
 
 
 def process_events(
-    events: list[dict],
-    student_data: dict[str, dict],
+    events: list[dict[str, Any]],
+    student_data: dict[str, Any],
     students_to_invoice: list[str],
     contact_details: dict[str, str]
 ) -> pd.DataFrame:
@@ -107,53 +119,55 @@ def process_events(
     for example, you may have just forgotten to add a new student's
     details to `students.json`.
     """
-    my_email = contact_details["email"]
-    lessons = []
+    my_email = contact_details["email"]  # Note: extracted but not currently used
+    lessons: list[list[Any]] = []
 
     for event in events:
-        event_title = event["summary"]
+        event_title = event.get("summary", "")
+        if not event_title:
+            logger.debug("Skipping event with no title")
+            continue
+
         attendees = event.get("attendees", [])
-        student_name = None
+        student_name: Optional[str] = None
 
-        # Check whether anyone else is included on the Google Calendar event
-        # if not, it's either a PMT or Blue Education event that has been
-        # sent to me only.
-        just_me = all(attendee.get("self", False) for attendee in attendees)
+        # Use schema module for event classification
+        event_type, extracted_name = classify_event(event_title, attendees)
 
-        # Attempt to extract `student_name`
-        if not just_me: # attempt to match by email
+        if event_type == "email":
             student_name = attendee_match(attendees, student_data)
-        elif "PMT" in event_title: # ignore these (payment handled by PMT)
+        elif event_type == "pmt":
+            logger.debug(f"Skipping PMT event: {event_title}")
             continue
-        elif "BAC" in event_title: # Blue Education invites start w/ `student_name`
-            student_name = " ".join(event_title.split()[0:2])
-        elif event_title.startswith("Tutoring "): # likely an in-person job
-            student_name = event_title.split("Tutoring ")[1].strip()
+        elif event_type in ("blue_education", "in_person"):
+            student_name = extracted_name
         else:
-            print(f"Skipping event with unexpected format: '{event_title}'")
+            logger.warning(f"Skipping event with unexpected format: '{event_title}'")
             continue
 
-        # If `student_name` is still None-like, then skip to next student
+        # Validate student name was extracted
         if not student_name:
-            print(f"Could not extract `student_name` from '{event_title}`. " \
-                  "Skipping event.")
+            logger.warning(
+                f"Could not extract student_name from '{event_title}'. Skipping event."
+            )
             continue
 
-        # Skip event if student is not in `students_to_invoice`. This is only
-        # used when the `--only` argument is used.
-        if (students_to_invoice) and (student_name not in students_to_invoice):
+        # Filter by students_to_invoice if specified
+        if students_to_invoice and student_name not in students_to_invoice:
             continue
 
-        # Handle missing student in `student_data` or KeyError
+        # Extract student details from student_data
         try:
             rate = student_data[student_name]["rate"]
             client_type = student_data[student_name]["client_type"]
         except KeyError:
-            print(f"KeyError with `student_name`: {student_name}. Likely not " \
-                  "added to `students.json`.")
+            logger.error(
+                f"Student '{student_name}' not found in students.json. "
+                f"Please add their details before generating invoices."
+            )
             continue
 
-        # Extract start and end dates
+        # Extract event times
         start = event["start"]["dateTime"]
         end = event["end"]["dateTime"]
 
@@ -167,4 +181,5 @@ def process_events(
     df["start"] = pd.to_datetime(df["start"], utc=True)
     df["end"] = pd.to_datetime(df["end"], utc=True)
 
+    logger.info(f"Processed {len(df)} lessons from {len(events)} events")
     return df
