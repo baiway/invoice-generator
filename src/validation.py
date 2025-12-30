@@ -96,7 +96,7 @@ def load_student_data() -> dict[str, StudentInfo]:
         STUDENTS_FILE,
         "students.json"
     )
-    return students_model.__root__
+    return students_model.root
 
 
 def load_bank_details() -> BankDetails:

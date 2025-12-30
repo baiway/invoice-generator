@@ -23,8 +23,7 @@ def parse_args() -> argparse.Namespace:
             "script generates invoices for all students for the last full "
             "month. To change this, use the `--only`, `--from` and `--to` "
             "flags."
-        ),
-        formatter_class=argparse.MetavarTypeHelpFormatter
+        )
     )
     parser.add_argument(
         "--only",
@@ -41,7 +40,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--from",
         dest="start",
-        type=str,
         help=(
             "Start of the invoice period in YYYY-MM-DD format. If not "
             "specified, defaults to the start of the last full month. "
@@ -54,7 +52,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--to",
         dest="end",
-        type=str,
         help=(
             "End of the invoice period in YYYY-MM-DD format (e.g. "
             "2024-09-30). Cannot be specified without `--from` (raises a "

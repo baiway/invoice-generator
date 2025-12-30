@@ -5,8 +5,7 @@ This module defines Pydantic models for all JSON configuration files,
 providing runtime validation and type safety.
 """
 
-from typing import Dict
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, RootModel
 
 
 class StudentInfo(BaseModel):
@@ -47,27 +46,27 @@ class ContactDetails(BaseModel):
     email: EmailStr = Field(..., description="Email address")
 
 
-class StudentsData(BaseModel):
+class StudentsData(RootModel[dict[str, StudentInfo]]):
     """Root model for students.json file."""
 
-    __root__: Dict[str, StudentInfo]
+    root: dict[str, StudentInfo]
 
     def __iter__(self):  # type: ignore
         """Allow iteration over students."""
-        return iter(self.__root__)
+        return iter(self.root)
 
     def __getitem__(self, item: str) -> StudentInfo:
         """Allow dictionary-style access."""
-        return self.__root__[item]
+        return self.root[item]
 
     def items(self):  # type: ignore
         """Allow .items() access like a dictionary."""
-        return self.__root__.items()
+        return self.root.items()
 
     def keys(self):  # type: ignore
         """Allow .keys() access like a dictionary."""
-        return self.__root__.keys()
+        return self.root.keys()
 
     def values(self):  # type: ignore
         """Allow .values() access like a dictionary."""
-        return self.__root__.values()
+        return self.root.values()
