@@ -35,26 +35,28 @@ def authenticate() -> Resource:
     Raises:
         FileNotFoundError: If credentials.json is not found
     """
-    credentials_path = Path(CREDENTIALS_FILE)
+    creds_path = Path(CREDENTIALS_FILE)
     token_path = Path(TOKEN_FILE)
     SCOPES = GOOGLE_CALENDAR_SCOPES
 
-    if not Path(credentials_path).is_file():
-        raise FileNotFoundError(f"credentials.json not found at `{credentials_path}`")
+    if not creds_path.is_file():
+        raise FileNotFoundError(f"`{creds_path.resolve()}` not found")
 
+    # Load existing credentials if available
     creds = None
-    if Path(token_path).is_file():
+    if token_path.is_file():
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(token_path, "w") as token:
-            token.write(creds.to_json())
-    service = build("calendar", "v3", credentials=creds)
-    return service
+
+    # Refresh or obtain new credentials if needed
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        token_path.write_text(creds.to_json())
+    elif not creds or not creds.valid:
+        flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
+        creds = flow.run_local_server(port=0)
+        token_path.write_text(creds.to_json())
+
+    return build("calendar", "v3", credentials=creds)
 
 
 def fetch_events(

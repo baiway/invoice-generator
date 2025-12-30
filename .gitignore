@@ -9,6 +9,9 @@ invoices
 data
 .DS_Store
 
+# Log files
+*.log
+
 # Test artifacts
 .coverage
 htmlcov/

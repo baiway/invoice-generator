@@ -21,7 +21,7 @@ from src.models import StudentInfo, BankDetails, ContactDetails, StudentsData
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
 
 
 def load_json_with_model(
@@ -45,18 +45,13 @@ def load_json_with_model(
         json.JSONDecodeError: If JSON is malformed
         ValidationError: If data doesn't match model schema
     """
-    # Load data file
-    data_path = Path(file_path)
-    if not data_path.exists():
-        logger.error(f"{description} file not found: {file_path}")
-        raise FileNotFoundError(
-            f"{description} file not found at '{file_path}'. "
-            f"Please create this file according to README.md instructions."
-        )
-
     try:
-        with open(data_path) as f:
+        with open(file_path) as f:
             data = json.load(f)
+    except FileNotFoundError as e:
+        logger.error(f"{description} file not found at '{file_path}'. "
+            f"Please create this file according to README.md instructions.")
+        raise
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in {file_path}: {e}")
         raise
@@ -71,9 +66,9 @@ def load_json_with_model(
         # Format validation errors for user
         errors = []
         for error in e.errors():
-            loc = " -> ".join(str(l) for l in error['loc'])
-            errors.append(f"  - {loc}: {error['msg']}")
-        error_msg = f"{description} file '{file_path}' has invalid format:\n" + "\n".join(errors)
+            location = " -> ".join(str(loc) for loc in error['loc'])
+            errors.append(f"  - {location}: {error['msg']}")
+        error_msg = f"`{file_path}` has invalid format:\n" + "\n".join(errors)
         raise ValidationError.from_exception_data(
             title=f"Invalid {description}",
             line_errors=[],

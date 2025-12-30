@@ -9,7 +9,6 @@ different client types.
 import pandas as pd
 from typing import Any, Optional
 
-from src.constants import PMT_PREFIX, BAC_PREFIX, TUTORING_PREFIX
 from src.models import StudentInfo, ContactDetails
 from src.logging_config import get_logger
 
@@ -52,16 +51,16 @@ def classify_event(
         return ("email", None)  # Name extracted via match_attendee_email()
 
     # PMT events should be skipped (payment handled by agency)
-    if PMT_PREFIX in event_title:
+    if "PMT" in event_title:
         return ("pmt", None)
 
     # Blue Education events: "FirstName LastName BAC [other text]"
-    if BAC_PREFIX in event_title:
+    if "BAC" in event_title:
         student_name = extract_blue_education_name(event_title)
         return ("blue_education", student_name)
 
     # In-person tutoring: "Tutoring StudentName"
-    if event_title.startswith(TUTORING_PREFIX):
+    if event_title.startswith("Tutoring "):
         student_name = extract_in_person_name(event_title)
         return ("in_person", student_name)
 
@@ -70,10 +69,8 @@ def classify_event(
 
 
 def extract_blue_education_name(event_title: str) -> str:
-    """
-    Extract student name from Blue Education event title.
-
-    Blue Education events are formatted as "FirstName LastName BAC [additional info]"
+    """Extract student name from Blue Education event title, which are
+    formatted as "FirstName LastName BAC [additional info]"
 
     Args:
         event_title: Event title containing "BAC"
@@ -82,26 +79,11 @@ def extract_blue_education_name(event_title: str) -> str:
         Student name (first and last name only)
 
     Examples:
-        >>> extract_blue_education_name("Oscar Sun BAC Maths Tutoring")
-        'Oscar Sun'
+        >>> extract_blue_education_name("Joe Bloggs BAC Maths Tutoring")
+        'Joe Bloggs'
     """
-    # Split on whitespace and find "BAC" position
     parts = event_title.split()
-
-    try:
-        bac_index = parts.index(BAC_PREFIX)
-        # Student name is the two words before "BAC"
-        if bac_index >= 2:
-            return f"{parts[bac_index - 2]} {parts[bac_index - 1]}"
-    except (ValueError, IndexError):
-        pass
-
-    # Fallback: if BAC not found as separate word or not enough parts,
-    # try taking first two words (legacy format support)
-    if len(parts) >= 2:
-        return f"{parts[0]} {parts[1]}"
-
-    return ""
+    return f"{parts[0]} {parts[1]}"
 
 
 def extract_in_person_name(event_title: str) -> str:
@@ -117,10 +99,10 @@ def extract_in_person_name(event_title: str) -> str:
         Student name (everything after "Tutoring ")
 
     Examples:
-        >>> extract_in_person_name("Tutoring Alice Johnson")
-        'Alice Johnson'
+        >>> extract_in_person_name("Tutoring Joe Bloggs")
+        'Joe Bloggs'
     """
-    return event_title.split(TUTORING_PREFIX, 1)[1].strip()
+    return event_title.split("Tutoring ", 1)[1].strip()
 
 
 def match_attendee_email(
@@ -210,6 +192,7 @@ def process_events(
     my_email = contact_details.email  # Note: extracted but not currently used
     lessons: list[list[Any]] = []
 
+    # Process events
     for event in events:
         event_title = event.get("summary", "")
         if not event_title:

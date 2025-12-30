@@ -1,8 +1,8 @@
 import json
 import argparse
+import sys
 from datetime import datetime
-from pathlib import Path
-from pydantic import ValidationError
+from rich.console import Console
 
 from src.calendar_api import authenticate, fetch_events
 from src.event_processing import process_events
@@ -13,6 +13,7 @@ from src.logging_config import setup_logging, get_logger
 from src.constants import OUTPUT_DIR
 
 logger = get_logger(__name__)
+console = Console()
 
 def parse_args() -> argparse.Namespace:
     """Parses command line arguments"""
@@ -122,8 +123,8 @@ def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
 
 
 def main() -> None:
-    # Set up logging first
-    setup_logging()
+    # Set up logging first - detailed logs written to file
+    log_file = setup_logging()
 
     # Parse and validate command line arguments
     args = parse_args()
@@ -135,10 +136,12 @@ def main() -> None:
     student_data = load_student_data()
     bank_details = load_bank_details()
     contact_details = load_contact_details()
+    console.print("[green]✓[/green] [cyan]Configuration files loaded[/cyan]")
 
     # Authenticate Google Calendar
     logger.info("Authenticating with Google Calendar...")
     service = authenticate()
+    console.print("[green]✓[/green] [cyan]Authenticated with Google[/cyan]")
 
     # Fetch all Google Calendar events over the invoice period
     logger.info("Fetching and processing Google Calendar events")
@@ -153,6 +156,7 @@ def main() -> None:
     #  Bob    | 2024-09-08 14:00:00+00 | 2024-09-08 15:00:00+00 |  40  |   agency
     lessons = process_events(events, student_data, students_to_invoice,
                              contact_details)
+    console.print("[green]✓[/green] [cyan]Events fetched and processed[/cyan]")
 
     # If `--only` is not specified (user is generating invoices for all
     # students seen in the invoice period), print a list of inactive students
@@ -162,13 +166,11 @@ def main() -> None:
 
     # Write invoices
     logger.info("Writing invoices...")
-    output_dir = Path(OUTPUT_DIR)
-    if not output_dir.exists():
-        output_dir.mkdir(parents=True)
-
-    write_invoices(output_dir, lessons, start_date, end_date, bank_details, contact_details)
-
-    logger.info(f"Invoices saved to: {output_dir.resolve()}")
+    invoices = write_invoices(lessons, start_date, end_date, bank_details,
+                              contact_details)
+    logger.info(f"Invoices saved to: {invoices}")
+    console.print(f"\n[cyan]Invoices saved to:[/cyan] {invoices}")
+    console.print(f"[cyan]Detailed logs:[/cyan] {log_file}\n")
 
 if __name__ == "__main__":
     main()
