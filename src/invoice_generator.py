@@ -23,12 +23,15 @@ from src.formatting import (
     format_hours_minutes,
     format_currency
 )
-from src.constants import CLIENT_TYPE_PRIVATE, OUTPUT_DIR
+from src.constants import OUTPUT_DIR
 from src.models import BankDetails, ContactDetails, StudentInfo
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
 console = Console()
+
+# Use absolute path for templates to support running tests from any directory
+PROJECT_ROOT = Path(__file__).parent.parent
 
 def get_invoice_period(
     start_date: datetime,
@@ -84,7 +87,7 @@ def write_invoices(
     # Initialise Jinja2 (templating) and WeasyPrint (generating PDFs)
     # and add custom filters
     env = Environment(
-        loader=FileSystemLoader("."),
+        loader=FileSystemLoader(str(PROJECT_ROOT)),
         autoescape=select_autoescape(["html", "xml"])
     )
     env.filters["british_date"] = format_british_date
@@ -92,7 +95,7 @@ def write_invoices(
     env.filters["hours_minutes"] = format_hours_minutes
     env.filters["currency"] = format_currency
     template = env.get_template("template/invoice-template.html")
-    css = CSS("template/styles.css")
+    css = CSS(str(PROJECT_ROOT / "template" / "styles.css"))
 
     invoice_period = get_invoice_period(start_date, end_date)
 

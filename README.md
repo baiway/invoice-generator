@@ -2,21 +2,11 @@
 
 Generates PDF invoices from Google Calendar events by matching attendee email addresses with details specified in `students.json`.
 
-## Features
-
-- Automated invoice generation from Google Calendar
-- Support for multiple client types (private clients, agencies)
-- Pydantic validation for configuration files
-- Type-safe Python codebase with mypy compliance
-- Comprehensive test suite
-- Structured logging and error handling
-
 ## Requirements
-
-- Python 3.9 or higher
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip for dependency management
+- Python >= 3.9
+- [uv](https://github.com/astral-sh/uv) (recommended) or `pip` for dependency management
 - Google Calendar API credentials (instructions below)
-- A consistent naming scheme for your Google Calendar events (e.g., "Tutoring Joe Bloggs")
+- A consistent naming scheme for your Google Calendar events (e.g. "Tutoring Joe Bloggs")
 
 ### Setting up Google Calendar API credentials
 1. Visit the [Google Developers Console](https://console.developers.google.com/) and create a new project.
@@ -81,23 +71,23 @@ mv ~/Downloads/credentials.json ./data
 
 `students.json`:
 ```json
-  {
-      "Alice": {
-          "client_type": "private",
-          "rate": 50,
-          "emails:" [
-            "alice3240@hotmail.co.uk",
-            "04alice@school.com"
-          ]
-      },
-      "Bob": {
-          "client_type": "tutors4u",
-          "rate": 40,
-          "emails": [
-            "bob9001@icloud.com"
-          ]
-      },
+{
+  "Alice": {
+    "client_type": "private",
+    "rate": 50,
+    "emails": [
+      "alice3240@hotmail.co.uk",
+      "04alice@school.com"
+    ]
+  },
+  "Bob": {
+    "client_type": "tutors4u",
+    "rate": 40,
+    "emails": [
+      "bob9001@icloud.com"
+    ]
   }
+}
 ```
 
 `bank_details.json`: You can get a payment link from the Monzo app. For the QR code link, just replace `joebloggs` with your Monzo username. Both the sort code and account number accept flexible input formats:
@@ -110,8 +100,8 @@ mv ~/Downloads/credentials.json ./data
   "sort_code": "12-34-56",
   "account_number": "1234 5678",
   "bank": "Monzo Bank",
-  "link": "https://monzo.me/joebloggs/amt?h=psiAKU",
-  "QR_code": "https://internal-api.monzo.com/inbound-p2p/qr-code/joebloggs?currency=GBP&amount=amt"
+  "link": "https://monzo.me/joebloggs/{amount}?h=psiAKU",
+  "QR_code": "https://internal-api.monzo.com/inbound-p2p/qr-code/joebloggs?currency=GBP&amount={amount}"
 }
 ```
 
@@ -161,15 +151,30 @@ Invoices are saved as PDFs in the `invoices/` directory:
 
 ### Running Tests
 
+The project has a comprehensive test suite with **144 tests** achieving **99% code coverage**.
+
 ```shell
 # Run all tests
 pytest
 
-# With coverage report
+# Run all tests with verbose output
+pytest -v
+
+# With coverage report (terminal)
+pytest --cov=src --cov-report=term-missing
+
+# With coverage report (HTML)
 pytest --cov=src --cov-report=html
+# Then open htmlcov/index.html in your browser
 
 # Run specific test file
-pytest tests/test_schema.py
+pytest tests/test_models.py
+
+# Run specific test class
+pytest tests/test_models.py::TestStudentInfo
+
+# Run specific test
+pytest tests/test_models.py::TestStudentInfo::test_valid_student_info
 ```
 
 ### Type Checking
@@ -187,18 +192,23 @@ invoice-generator/
 ├── src/
 │   ├── calendar_api.py       # Google Calendar API integration
 │   ├── event_processing.py   # Event classification and processing
-│   ├── invoice_generator.py  # PDF generation
+│   ├── invoice_generator.py  # PDF generation with WeasyPrint
 │   ├── data_loader.py        # JSON loading with Pydantic validation
-│   ├── models.py             # Pydantic models with formatting methods
+│   ├── models.py             # Pydantic models with validators and properties
 │   ├── constants.py          # Configuration constants
-│   ├── logging_config.py     # Logging setup
+│   ├── logging_config.py     # Logging setup (file + console handlers)
 │   ├── utils.py              # Date utilities
-│   └── formatting.py         # Display formatting
+│   └── formatting.py         # Display formatting (dates, times, currency)
 ├── tests/                    # Test suite
-│   ├── conftest.py           # Pytest fixtures
-│   ├── test_schema.py        # Event classification tests
-│   ├── test_utils.py         # Date utility tests
-│   └── test_formatting.py    # Formatting tests
+│   ├── conftest.py           # Pytest fixtures and test data
+│   ├── test_calendar_api.py  # Google Calendar API tests (mocked)
+│   ├── test_data_loader.py   # JSON loading and validation tests
+│   ├── test_event_processing.py  # Event classification tests
+│   ├── test_formatting.py    # Formatting function tests
+│   ├── test_invoice_generator.py # PDF generation tests
+│   ├── test_logging_config.py    # Logging configuration tests
+│   ├── test_models.py        # Pydantic model validation tests
+│   └── test_utils.py         # Date utility tests
 ├── data/                     # Configuration files (git-ignored)
 │   ├── students.json
 │   ├── bank_details.json
@@ -208,7 +218,7 @@ invoice-generator/
 ├── template/                 # Invoice template
 │   ├── invoice-template.html
 │   └── styles.css
-└── invoices/                 # Generated PDFs
+└── invoices/                 # Generated PDFs (git-ignored)
 ```
 
 ## Troubleshooting
@@ -221,7 +231,7 @@ If you experience issues with `weasyprint` on macOS, see: [gobject-2.0-0 not abl
 
 If you see "Validation failed" errors, check that your JSON files match the expected format:
 - `students.json`: Each student needs `client_type`, `rate`, and `emails` (array of email addresses, can be empty)
-- `bank_details.json`: Must include `amt` placeholder in both `link` and `QR_code` fields. Sort code must be 6 digits (dashes optional). Account number must be 8 digits (spaces optional).
+- `bank_details.json`: Must include `{amount}` placeholder in both `link` and `QR_code` fields. Sort code must be 6 digits (dashes optional). Account number must be 8 digits (spaces optional).
 - `contact_details.json`: Must have valid `country_code` (e.g., "+44"), `phone_number` (10+ digits, formatting optional), and `email` fields
 - Email addresses must be in valid format
 

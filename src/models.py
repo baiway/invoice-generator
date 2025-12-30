@@ -129,9 +129,8 @@ class ContactDetails(BaseModel):
             country_code="+1", phone_number="2025551234" -> "+1 2025 551234"
         """
         # Format: +CC XXXX XXXXXX
-        if len(self.phone_number) >= 10:
-            return f"{self.country_code} {self.phone_number[:4]} {self.phone_number[4:]}"
-        return f"{self.country_code} {self.phone_number}"
+        # Note: phone_number is guaranteed to have >= 10 digits by the validator
+        return f"{self.country_code} {self.phone_number[:4]} {self.phone_number[4:]}"
 
 
 class StudentsData(RootModel[dict[str, StudentInfo]]):
