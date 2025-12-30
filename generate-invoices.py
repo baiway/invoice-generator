@@ -1,10 +1,19 @@
 import json
 import argparse
+import sys
 from datetime import datetime
-from pathlib import Path
-from src.api import authenticate, fetch_events, process_events
+from rich.console import Console
+
+from src.calendar_api import authenticate, fetch_events
+from src.event_processing import process_events
 from src.utils import get_last_full_month
-from src.outputs import write_invoices, print_inactive_students
+from src.invoice_generator import write_invoices, print_inactive_students
+from src.data_loader import load_student_data, load_bank_details, load_contact_details
+from src.logging_config import setup_logging, get_logger
+from src.constants import OUTPUT_DIR
+
+logger = get_logger(__name__)
+console = Console()
 
 def parse_args() -> argparse.Namespace:
     """Parses command line arguments"""
@@ -16,8 +25,7 @@ def parse_args() -> argparse.Namespace:
             "script generates invoices for all students for the last full "
             "month. To change this, use the `--only`, `--from` and `--to` "
             "flags."
-        ),
-        formatter_class=argparse.MetavarTypeHelpFormatter
+        )
     )
     parser.add_argument(
         "--only",
@@ -34,7 +42,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--from",
         dest="start",
-        type=str,
         help=(
             "Start of the invoice period in YYYY-MM-DD format. If not "
             "specified, defaults to the start of the last full month. "
@@ -47,7 +54,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--to",
         dest="end",
-        type=str,
         help=(
             "End of the invoice period in YYYY-MM-DD format (e.g. "
             "2024-09-30). Cannot be specified without `--from` (raises a "
@@ -116,24 +122,29 @@ def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
     return start_date, end_date
 
 
-def main():
+def main() -> None:
+    # Set up logging first - detailed logs written to file
+    log_file = setup_logging()
+
     # Parse and validate command line arguments
     args = parse_args()
     students_to_invoice = validate_students(args.only)
     start_date, end_date = validate_invoice_period(args.start, args.end)
 
-    # Load `students.json`, `bank_details.json` and `contact_details.json`
-    with open("data/students.json", "r") as f:
-        student_data = json.load(f)
-    with open("data/bank_details.json", "r") as f:
-        bank_details = json.load(f)
-    with open("data/contact_details.json", "r") as f:
-        contact_details = json.load(f)
+    # Load and validate JSON data files
+    logger.info("Loading configuration files...")
+    student_data = load_student_data()
+    bank_details = load_bank_details()
+    contact_details = load_contact_details()
+    console.print("[green]✓[/green] [cyan]Configuration files loaded[/cyan]")
 
     # Authenticate Google Calendar
+    logger.info("Authenticating with Google Calendar...")
     service = authenticate()
+    console.print("[green]✓[/green] [cyan]Authenticated with Google[/cyan]")
 
     # Fetch all Google Calendar events over the invoice period
+    logger.info("Fetching and processing Google Calendar events")
     events = fetch_events(service, start_date, end_date)
 
     # Matches Google Calendar events to students listed in `students.json`,
@@ -145,6 +156,7 @@ def main():
     #  Bob    | 2024-09-08 14:00:00+00 | 2024-09-08 15:00:00+00 |  40  |   agency
     lessons = process_events(events, student_data, students_to_invoice,
                              contact_details)
+    console.print("[green]✓[/green] [cyan]Events fetched and processed[/cyan]")
 
     # If `--only` is not specified (user is generating invoices for all
     # students seen in the invoice period), print a list of inactive students
@@ -153,11 +165,12 @@ def main():
         print_inactive_students(lessons, student_data)
 
     # Write invoices
-    output_dir = Path("./invoices")
-    if not output_dir.exists():
-        output_dir.mkdir()
-    write_invoices(output_dir, lessons, start_date, end_date, bank_details, contact_details)
-    print(f"Invoices saved here: {output_dir.resolve()}")
+    logger.info("Writing invoices...")
+    invoices = write_invoices(lessons, start_date, end_date, bank_details,
+                              contact_details)
+    logger.info(f"Invoices saved to: {invoices}")
+    console.print(f"\n[cyan]Invoices saved to:[/cyan] {invoices}")
+    console.print(f"[cyan]Detailed logs:[/cyan] {log_file}\n")
 
 if __name__ == "__main__":
     main()

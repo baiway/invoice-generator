@@ -1,5 +1,12 @@
-import logging
+"""
+Invoice generation and PDF rendering.
+
+This module handles generating HTML invoices from lesson data and
+rendering them as PDFs using WeasyPrint.
+"""
+
 import pandas as pd
+import sys
 import calendar
 from datetime import datetime
 from pathlib import Path
@@ -7,15 +14,24 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML, CSS
 from bs4 import BeautifulSoup
 from typing import Any
+from rich.progress import track
+from rich.console import Console
+
 from src.formatting import (
     format_british_date,
     format_24h_time,
     format_hours_minutes,
     format_currency
 )
+from src.constants import OUTPUT_DIR
+from src.models import BankDetails, ContactDetails, StudentInfo
+from src.logging_config import get_logger
 
-# Suppress warnings from fontTools
-logging.basicConfig(level=logging.ERROR)
+logger = get_logger(__name__)
+console = Console()
+
+# Use absolute path for templates to support running tests from any directory
+PROJECT_ROOT = Path(__file__).parent.parent
 
 def get_invoice_period(
     start_date: datetime,
@@ -48,19 +64,30 @@ def extract_page_content(rendered_html: str) -> str:
 
 
 def write_invoices(
-    output_dir: Path,
     lessons: pd.DataFrame,
     start_date: datetime,
     end_date: datetime,
-    bank_details: dict[str, str],
-    contact_details: dict[str, str]
-):
-    """Generates and writes invoice as PDFs for specified students
-    over the invoice period."""
+    bank_details: BankDetails,
+    contact_details: ContactDetails
+) -> str:
+    """Generates and writes invoice as PDFs for specified students over the invoice period.
+
+    Args:
+        output_dir: Directory to write PDF invoices to
+        lessons: DataFrame containing lesson information
+        start_date: Start of invoice period
+        end_date: End of invoice period
+        bank_details: BankDetails model with payment information
+        contact_details: ContactDetails model with contact information
+    """
+    # Create output directory if it does not already exist
+    output_dir = Path(OUTPUT_DIR)
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True)
     # Initialise Jinja2 (templating) and WeasyPrint (generating PDFs)
     # and add custom filters
     env = Environment(
-        loader=FileSystemLoader("."),
+        loader=FileSystemLoader(str(PROJECT_ROOT)),
         autoescape=select_autoescape(["html", "xml"])
     )
     env.filters["british_date"] = format_british_date
@@ -68,7 +95,7 @@ def write_invoices(
     env.filters["hours_minutes"] = format_hours_minutes
     env.filters["currency"] = format_currency
     template = env.get_template("template/invoice-template.html")
-    css = CSS("template/styles.css")
+    css = CSS(str(PROJECT_ROOT / "template" / "styles.css"))
 
     invoice_period = get_invoice_period(start_date, end_date)
 
@@ -78,7 +105,13 @@ def write_invoices(
 
     grouped_lessons = lessons.groupby("student")
 
-    for student, lesson_info in grouped_lessons:
+    # Generate invoices for each student with progress bar
+    for student, lesson_info in track(
+        grouped_lessons,
+        description="[cyan]Generating invoices",
+        console=console,
+        transient=True
+    ):
         # Get start and end times for each session
         start_times = lesson_info["start"]
         end_times = lesson_info["end"]
@@ -94,8 +127,9 @@ def write_invoices(
         deets = True # always include payment information
 
         # Generate QR code and payment link dynamically based on amount owed
-        QR_code = bank_details["QR_code"].replace("amt", str(int(total_charge * 100)))
-        link = bank_details["link"].replace("amt", str(total_charge))
+        # QR code uses pence (amount * 100), payment link uses pounds
+        QR_code = bank_details.QR_code.format(amount=int(total_charge * 100))
+        link = bank_details.link.format(amount=total_charge)
 
         # Substitute lesson information into template HTML
         rendered_html = template.render(
@@ -108,12 +142,12 @@ def write_invoices(
             deets=deets,
             link=link if deets else "",
             QR_code=QR_code if deets else "",
-            name=bank_details["name"] if deets else "",
-            sort_code=bank_details["sort_code"] if deets else "",
-            account_number=bank_details["account_number"] if deets else "",
-            bank=bank_details["bank"] if deets else "",
-            mobile=contact_details["mobile"] if deets else "",
-            email=contact_details["email"] if deets else ""
+            name=bank_details.name if deets else "",
+            sort_code=bank_details.formatted_sort_code if deets else "",
+            account_number=bank_details.formatted_account_number if deets else "",
+            bank=bank_details.bank if deets else "",
+            mobile=contact_details.formatted_mobile if deets else "",
+            email=contact_details.email if deets else ""
         )
 
         # Generate separate PDFs for private clients and collect agency
@@ -122,12 +156,16 @@ def write_invoices(
             html = HTML(string=rendered_html)
             filename = f"{str(student).lower()}-invoice.pdf".replace(" ", "-")
             html.write_pdf(output_dir / filename, stylesheets=[css])
+            logger.info(f"Generated invoice for {student}")
         else:
             # Extract the content inside the <div class="container">
             page_content = extract_page_content(rendered_html)
             if client_type not in agency_html:
                 agency_html[client_type] = []
             agency_html[client_type].append(page_content + "\n\t")
+
+    # Print success message after transient progress bar disappears
+    console.print("[green]✓[/green] [cyan]Invoices generated[/cyan]")
 
     # Define outer HTML for agency invoices (this was removed by the above)
     # `extract_page_content` call to avoid duplicating the <html>, <head>, etc.
@@ -154,16 +192,24 @@ def write_invoices(
         html = HTML(string=outer_html.format(content=invoices))
         filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
         html.write_pdf(output_dir / filename, stylesheets=[css])
+        logger.info(f"Generated combined invoice for {agency}")
+
+    return str(output_dir.resolve())
 
 def print_inactive_students(
     lessons: pd.DataFrame,
-    student_data: dict[str, Any]
+    student_data: dict[str, StudentInfo]
 ) -> None:
-    """Prints a list of students not seen in the provided invoice
-    period (to prompt the user to contact them).
+    """Logs a list of students not seen in the provided invoice period.
+
+    This prompts the user to contact inactive students.
+
+    Args:
+        lessons: DataFrame containing lesson information
+        student_data: Dictionary mapping student names to StudentInfo models
     """
     students_seen = lessons["student"].unique()
 
     for student in student_data:
         if student not in students_seen:
-            print(f"  {student} not seen in this period.")
+            logger.info(f"{student} not seen in this period")
