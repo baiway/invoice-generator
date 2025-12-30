@@ -100,22 +100,26 @@ mv ~/Downloads/credentials.json ./data
   }
 ```
 
-`bank_details.json`: You can get a payment link from the Monzo app. For the QR code link, just replace `joebloggs` with your Monzo username.
+`bank_details.json`: You can get a payment link from the Monzo app. For the QR code link, just replace `joebloggs` with your Monzo username. Both the sort code and account number accept flexible input formats:
+- Sort code: `"12-34-56"` or `"123456"` (dashes optional)
+- Account number: `"1234 5678"` or `"12345678"` (spaces optional)
+
 ```json
 {
   "name": "Joe Bloggs",
-  "sort_code": "04-00-04",
-  "account_number": "8093 4419",
+  "sort_code": "12-34-56",
+  "account_number": "1234 5678",
   "bank": "Monzo Bank",
   "link": "https://monzo.me/joebloggs/amt?h=psiAKU",
   "QR_code": "https://internal-api.monzo.com/inbound-p2p/qr-code/joebloggs?currency=GBP&amount=amt"
 }
 ```
 
-`contact_details.json`: Replace the mobile number and email address with your details.
+`contact_details.json`: Replace the country code, phone number and email address with your details. The phone number can include spaces or other formatting characters (they'll be normalised automatically).
 ```json
 {
-  "mobile": "07803 293571",
+  "country_code": "+44",
+  "phone_number": "1234 567890",
   "email": "joethetutor@gmail.com"
 }
 ```
@@ -178,33 +182,33 @@ mypy src/ generate-invoices.py
 
 ```
 invoice-generator/
-├── pyproject.toml           # Project configuration (replaces requirements.txt)
-├── generate-invoices.py     # Main entry point
+├── pyproject.toml            # Project configuration with uv support
+├── generate-invoices.py      # Main entry point
 ├── src/
-│   ├── api.py              # Google Calendar integration
-│   ├── schema.py           # Event classification logic
-│   ├── models.py           # Pydantic models for validation
-│   ├── validation.py       # JSON loading with validation
-│   ├── constants.py        # Configuration constants
-│   ├── logging_config.py   # Logging setup
-│   ├── outputs.py          # PDF generation
-│   ├── utils.py            # Date utilities
-│   └── formatting.py       # Display formatting
-├── tests/                  # Test suite
-│   ├── conftest.py         # Pytest fixtures
-│   ├── test_schema.py
-│   ├── test_utils.py
-│   └── test_formatting.py
-├── data/                   # Configuration files (git-ignored)
+│   ├── calendar_api.py       # Google Calendar API integration
+│   ├── event_processing.py   # Event classification and processing
+│   ├── invoice_generator.py  # PDF generation
+│   ├── data_loader.py        # JSON loading with Pydantic validation
+│   ├── models.py             # Pydantic models with formatting methods
+│   ├── constants.py          # Configuration constants
+│   ├── logging_config.py     # Logging setup
+│   ├── utils.py              # Date utilities
+│   └── formatting.py         # Display formatting
+├── tests/                    # Test suite
+│   ├── conftest.py           # Pytest fixtures
+│   ├── test_schema.py        # Event classification tests
+│   ├── test_utils.py         # Date utility tests
+│   └── test_formatting.py    # Formatting tests
+├── data/                     # Configuration files (git-ignored)
 │   ├── students.json
 │   ├── bank_details.json
 │   ├── contact_details.json
 │   ├── credentials.json
 │   └── token.json
-├── template/               # Invoice template
+├── template/                 # Invoice template
 │   ├── invoice-template.html
 │   └── styles.css
-└── invoices/               # Generated PDFs
+└── invoices/                 # Generated PDFs
 ```
 
 ## Troubleshooting
@@ -216,9 +220,9 @@ If you experience issues with `weasyprint` on macOS, see: [gobject-2.0-0 not abl
 ### Pydantic Validation Errors
 
 If you see "Validation failed" errors, check that your JSON files match the expected format:
-- `students.json`: Each student needs `client_type`, `rate`, and `emails` (array of email addresses)
-- `bank_details.json`: Must include `amt` placeholder in both `link` and `QR_code` fields
-- `contact_details.json`: Must have valid `mobile` and `email` fields
+- `students.json`: Each student needs `client_type`, `rate`, and `emails` (array of email addresses, can be empty)
+- `bank_details.json`: Must include `amt` placeholder in both `link` and `QR_code` fields. Sort code must be 6 digits (dashes optional). Account number must be 8 digits (spaces optional).
+- `contact_details.json`: Must have valid `country_code` (e.g., "+44"), `phone_number` (10+ digits, formatting optional), and `email` fields
 - Email addresses must be in valid format
 
 ### Google Calendar Authentication

@@ -4,10 +4,11 @@ from datetime import datetime
 from pathlib import Path
 from pydantic import ValidationError
 
-from src.api import authenticate, fetch_events, process_events
+from src.calendar_api import authenticate, fetch_events
+from src.event_processing import process_events
 from src.utils import get_last_full_month
-from src.outputs import write_invoices, print_inactive_students
-from src.validation import load_student_data, load_bank_details, load_contact_details
+from src.invoice_generator import write_invoices, print_inactive_students
+from src.data_loader import load_student_data, load_bank_details, load_contact_details
 from src.logging_config import setup_logging, get_logger
 from src.constants import OUTPUT_DIR
 
@@ -131,28 +132,16 @@ def main() -> None:
 
     # Load and validate JSON data files
     logger.info("Loading configuration files...")
-    try:
-        student_data_dict = load_student_data()
-        bank_details_model = load_bank_details()
-        contact_details_model = load_contact_details()
-
-        # Convert Pydantic models to dicts for compatibility with existing code
-        student_data = {name: info.model_dump() for name, info in student_data_dict.items()}
-        bank_details = bank_details_model.model_dump()
-        contact_details = contact_details_model.model_dump()
-    except (FileNotFoundError, json.JSONDecodeError, ValidationError) as e:
-        logger.error(f"Configuration error: {e}")
-        return
+    student_data = load_student_data()
+    bank_details = load_bank_details()
+    contact_details = load_contact_details()
 
     # Authenticate Google Calendar
     logger.info("Authenticating with Google Calendar...")
-    try:
-        service = authenticate()
-    except FileNotFoundError as e:
-        logger.error(str(e))
-        return
+    service = authenticate()
 
     # Fetch all Google Calendar events over the invoice period
+    logger.info("Fetching and processing Google Calendar events")
     events = fetch_events(service, start_date, end_date)
 
     # Matches Google Calendar events to students listed in `students.json`,
@@ -172,11 +161,11 @@ def main() -> None:
         print_inactive_students(lessons, student_data)
 
     # Write invoices
+    logger.info("Writing invoices...")
     output_dir = Path(OUTPUT_DIR)
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
 
-    logger.info("Generating invoices...")
     write_invoices(output_dir, lessons, start_date, end_date, bank_details, contact_details)
 
     logger.info(f"Invoices saved to: {output_dir.resolve()}")

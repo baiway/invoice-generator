@@ -1,8 +1,8 @@
 """
-JSON data loading and validation utilities.
+Data loading and validation utilities.
 
-This module provides type-safe data loading with Pydantic validation
-and comprehensive error handling.
+This module provides type-safe loading of JSON configuration files
+with Pydantic validation and comprehensive error handling.
 """
 
 import json

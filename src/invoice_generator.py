@@ -1,3 +1,10 @@
+"""
+Invoice generation and PDF rendering.
+
+This module handles generating HTML invoices from lesson data and
+rendering them as PDFs using WeasyPrint.
+"""
+
 import pandas as pd
 import calendar
 from datetime import datetime
@@ -14,6 +21,7 @@ from src.formatting import (
     format_currency
 )
 from src.constants import CLIENT_TYPE_PRIVATE, AMOUNT_PLACEHOLDER
+from src.models import BankDetails, ContactDetails, StudentInfo
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -53,11 +61,19 @@ def write_invoices(
     lessons: pd.DataFrame,
     start_date: datetime,
     end_date: datetime,
-    bank_details: dict[str, str],
-    contact_details: dict[str, str]
+    bank_details: BankDetails,
+    contact_details: ContactDetails
 ):
-    """Generates and writes invoice as PDFs for specified students
-    over the invoice period."""
+    """Generates and writes invoice as PDFs for specified students over the invoice period.
+
+    Args:
+        output_dir: Directory to write PDF invoices to
+        lessons: DataFrame containing lesson information
+        start_date: Start of invoice period
+        end_date: End of invoice period
+        bank_details: BankDetails model with payment information
+        contact_details: ContactDetails model with contact information
+    """
     # Initialise Jinja2 (templating) and WeasyPrint (generating PDFs)
     # and add custom filters
     env = Environment(
@@ -95,8 +111,8 @@ def write_invoices(
         deets = True # always include payment information
 
         # Generate QR code and payment link dynamically based on amount owed
-        QR_code = bank_details["QR_code"].replace(AMOUNT_PLACEHOLDER, str(int(total_charge * 100)))
-        link = bank_details["link"].replace(AMOUNT_PLACEHOLDER, str(total_charge))
+        QR_code = bank_details.QR_code.replace(AMOUNT_PLACEHOLDER, str(int(total_charge * 100)))
+        link = bank_details.link.replace(AMOUNT_PLACEHOLDER, str(total_charge))
 
         # Substitute lesson information into template HTML
         rendered_html = template.render(
@@ -109,12 +125,12 @@ def write_invoices(
             deets=deets,
             link=link if deets else "",
             QR_code=QR_code if deets else "",
-            name=bank_details["name"] if deets else "",
-            sort_code=bank_details["sort_code"] if deets else "",
-            account_number=bank_details["account_number"] if deets else "",
-            bank=bank_details["bank"] if deets else "",
-            mobile=contact_details["mobile"] if deets else "",
-            email=contact_details["email"] if deets else ""
+            name=bank_details.name if deets else "",
+            sort_code=bank_details.formatted_sort_code if deets else "",
+            account_number=bank_details.formatted_account_number if deets else "",
+            bank=bank_details.bank if deets else "",
+            mobile=contact_details.formatted_mobile if deets else "",
+            email=contact_details.email if deets else ""
         )
 
         # Generate separate PDFs for private clients and collect agency
@@ -160,10 +176,15 @@ def write_invoices(
 
 def print_inactive_students(
     lessons: pd.DataFrame,
-    student_data: dict[str, Any]
+    student_data: dict[str, StudentInfo]
 ) -> None:
-    """Prints a list of students not seen in the provided invoice
-    period (to prompt the user to contact them).
+    """Prints a list of students not seen in the provided invoice period.
+
+    This prompts the user to contact inactive students.
+
+    Args:
+        lessons: DataFrame containing lesson information
+        student_data: Dictionary mapping student names to StudentInfo models
     """
     students_seen = lessons["student"].unique()
 
