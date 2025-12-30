@@ -1,11 +1,22 @@
-# Invoice generator
-Generates invoices from Google Calendar events by matching attendee email addresses with details specified a `students.json` file.
+# Invoice Generator
 
-## Getting started
-### Requirements
-- [Python 3](https://python.org/): to check whether you have Python 3 installed, type `python3 --version` into your terminal (or type `py --version` into PowerShell on Windows). If Python is not installed, you can download it from [python.org/downloads](https://python.org/downloads/).
+Generates PDF invoices from Google Calendar events by matching attendee email addresses with details specified in `students.json`.
+
+## Features
+
+- Automated invoice generation from Google Calendar
+- Support for multiple client types (private clients, agencies)
+- Pydantic validation for configuration files
+- Type-safe Python codebase with mypy compliance
+- Comprehensive test suite
+- Structured logging and error handling
+
+## Requirements
+
+- Python 3.9 or higher
+- [uv](https://github.com/astral-sh/uv) (recommended) or pip for dependency management
 - Google Calendar API credentials (instructions below)
-- A simple naming scheme for your Google Calendar events. All of mine are called something like "Tutoring Joe Bloggs", which makes this sort of automation possible. If you do not have a consistent naming convention for your Google Calendar, you're going to run into problems.
+- A consistent naming scheme for your Google Calendar events (e.g., "Tutoring Joe Bloggs")
 
 ### Setting up Google Calendar API credentials
 1. Visit the [Google Developers Console](https://console.developers.google.com/) and create a new project.
@@ -17,29 +28,47 @@ Generates invoices from Google Calendar events by matching attendee email addres
 For detailed steps, refer to the [official Google Calendar API documentation](https://developers.google.com/calendar/quickstart/python).
 
 ### Installation
-**1. Clone the project**
+
+#### Using uv (Recommended)
+
+**1. Install uv:**
 ```shell
-git clone https://github.com/baiway/invoice-generator.git
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Or via pip
+pip install uv
 ```
 
-**2. Change into the project directory**
+**2. Clone the project:**
 ```shell
+git clone https://github.com/baiway/invoice-generator.git
 cd invoice-generator
 ```
 
-**3. Create a virtual environment**
+**3. Create virtual environment and install dependencies:**
+```shell
+uv venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+uv pip install -e .
+```
+
+**4. Install development dependencies (for testing):**
+```shell
+uv pip install -e ".[dev]"
+```
+
+#### Using pip
+
+If you prefer pip, you can install from `pyproject.toml`:
+
 ```shell
 python -m venv .venv
-```
-
-**4. Activate the environment**
-```shell
 source .venv/bin/activate
-```
-
-**5. Install dependencies**
-```shell
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Setup
@@ -96,18 +125,107 @@ mv ~/Downloads/credentials.json ./data
 }
 ```
 
-## Running the script
-To run the script, enter the following command:
+## Usage
+
+### Basic Usage
+
+Generate invoices for the last full month:
 ```shell
 python generate-invoices.py
 ```
 
-By default, the script will generate invoices for all students seen within the last full month. For example, if the script is run on 3rd September 2024, the start of the invoice period will default to 1st August 2024 and the end will default to 31st August 2024. This behaviour can be changed with the `--only`, `--from` and `--to` options. For details, enter:
+### Advanced Options
+
+```shell
+# Generate for specific students only
+python generate-invoices.py --only "Alice" "Bob"
+
+# Custom date range
+python generate-invoices.py --from 2024-01-01 --to 2024-01-31
+
+# Custom start date (end defaults to today)
+python generate-invoices.py --from 2024-01-01
+```
+
+For all options:
 ```shell
 python generate-invoices.py --help
 ```
 
-If the script runs successfully, invoices will be generated in the `invoices` folder.
+### Output
 
-## Potential issues
-If you experience issues with `weasyprint`, see: [gobject-2.0-0 not able to load on macbook](https://stackoverflow.com/questions/69097224/gobject-2-0-0-not-able-to-load-on-macbook/69295303#69295303) on Stack Overflow.
+Invoices are saved as PDFs in the `invoices/` directory:
+- Private clients: `alice-invoice.pdf`
+- Agency clients: Combined into `agency-name-invoice.pdf`
+
+## Development
+
+### Running Tests
+
+```shell
+# Run all tests
+pytest
+
+# With coverage report
+pytest --cov=src --cov-report=html
+
+# Run specific test file
+pytest tests/test_schema.py
+```
+
+### Type Checking
+
+```shell
+mypy src/ generate-invoices.py
+```
+
+### Project Structure
+
+```
+invoice-generator/
+├── pyproject.toml           # Project configuration (replaces requirements.txt)
+├── generate-invoices.py     # Main entry point
+├── src/
+│   ├── api.py              # Google Calendar integration
+│   ├── schema.py           # Event classification logic
+│   ├── models.py           # Pydantic models for validation
+│   ├── validation.py       # JSON loading with validation
+│   ├── constants.py        # Configuration constants
+│   ├── logging_config.py   # Logging setup
+│   ├── outputs.py          # PDF generation
+│   ├── utils.py            # Date utilities
+│   └── formatting.py       # Display formatting
+├── tests/                  # Test suite
+│   ├── conftest.py         # Pytest fixtures
+│   ├── test_schema.py
+│   ├── test_utils.py
+│   └── test_formatting.py
+├── data/                   # Configuration files (git-ignored)
+│   ├── students.json
+│   ├── bank_details.json
+│   ├── contact_details.json
+│   ├── credentials.json
+│   └── token.json
+├── template/               # Invoice template
+│   ├── invoice-template.html
+│   └── styles.css
+└── invoices/               # Generated PDFs
+```
+
+## Troubleshooting
+
+### weasyprint Installation Issues
+
+If you experience issues with `weasyprint` on macOS, see: [gobject-2.0-0 not able to load on macbook](https://stackoverflow.com/questions/69097224/gobject-2-0-0-not-able-to-load-on-macbook/69295303#69295303) on Stack Overflow.
+
+### Pydantic Validation Errors
+
+If you see "Validation failed" errors, check that your JSON files match the expected format:
+- `students.json`: Each student needs `client_type`, `rate`, and `emails` (array of email addresses)
+- `bank_details.json`: Must include `amt` placeholder in both `link` and `QR_code` fields
+- `contact_details.json`: Must have valid `mobile` and `email` fields
+- Email addresses must be in valid format
+
+### Google Calendar Authentication
+
+On first run, a browser window will open for Google OAuth. After authentication, a `token.json` file is created for future runs.
