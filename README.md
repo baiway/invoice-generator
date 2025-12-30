@@ -49,26 +49,21 @@ git clone https://github.com/baiway/invoice-generator.git
 cd invoice-generator
 ```
 
-**3. Create virtual environment and install dependencies:**
+**3. Install dependencies:**
 ```shell
-uv venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-uv pip install -e .
+uv sync
 ```
 
-**4. Install development dependencies (for testing):**
-```shell
-uv pip install -e ".[dev]"
-```
+This creates a virtual environment and installs all dependencies including dev dependencies (pytest, mypy, etc.).
 
 #### Using pip
 
-If you prefer pip, you can install from `pyproject.toml`:
+If you prefer pip:
 
 ```shell
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ### Setup
