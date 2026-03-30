@@ -90,7 +90,7 @@ mv ~/Downloads/credentials.json ./data
 }
 ```
 
-`bank_details.json`: You can get a payment link from the Monzo app. For the QR code link, just replace `joebloggs` with your Monzo username. Both the sort code and account number accept flexible input formats:
+`bank_details.json`: Both the sort code and account number accept flexible input formats:
 - Sort code: `"12-34-56"` or `"123456"` (dashes optional)
 - Account number: `"1234 5678"` or `"12345678"` (spaces optional)
 
@@ -99,9 +99,7 @@ mv ~/Downloads/credentials.json ./data
   "name": "Joe Bloggs",
   "sort_code": "12-34-56",
   "account_number": "1234 5678",
-  "bank": "Monzo Bank",
-  "link": "https://monzo.me/joebloggs/{amount}?h=psiAKU",
-  "QR_code": "https://internal-api.monzo.com/inbound-p2p/qr-code/joebloggs?currency=GBP&amount={amount}"
+  "bank": "Monzo Bank"
 }
 ```
 
@@ -231,7 +229,7 @@ If you experience issues with `weasyprint` on macOS, see: [gobject-2.0-0 not abl
 
 If you see "Validation failed" errors, check that your JSON files match the expected format:
 - `students.json`: Each student needs `client_type`, `rate`, and `emails` (array of email addresses, can be empty)
-- `bank_details.json`: Must include `{amount}` placeholder in both `link` and `QR_code` fields. Sort code must be 6 digits (dashes optional). Account number must be 8 digits (spaces optional).
+- `bank_details.json`: Sort code must be 6 digits (dashes optional). Account number must be 8 digits (spaces optional).
 - `contact_details.json`: Must have valid `country_code` (e.g., "+44"), `phone_number` (10+ digits, formatting optional), and `email` fields
 - Email addresses must be in valid format
 

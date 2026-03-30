@@ -41,8 +41,6 @@ class BankDetails(BaseModel):
     sort_code: str = Field(..., description="Bank sort code (6 digits, dashes optional)")
     account_number: str = Field(..., description="Bank account number (8 digits, spaces optional)")
     bank: str = Field(..., min_length=1, description="Bank name")
-    link: str = Field(..., description="Payment link URL (must contain {amount} placeholder)")
-    QR_code: str = Field(..., description="QR code image URL (must contain {amount} placeholder)")
 
     @field_validator("sort_code")
     @classmethod
@@ -69,14 +67,6 @@ class BankDetails(BaseModel):
             raise ValueError("Account number must be exactly 8 digits")
 
         return normalised
-
-    @field_validator("link", "QR_code")
-    @classmethod
-    def validate_contains_placeholder(cls, v: str) -> str:
-        """Validate that payment links contain the {amount} placeholder."""
-        if "{amount}" not in v:
-            raise ValueError("Must contain {amount} placeholder for dynamic amount replacement")
-        return v
 
     @property
     def formatted_sort_code(self) -> str:

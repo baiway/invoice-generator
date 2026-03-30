@@ -88,9 +88,7 @@ class TestBankDetails:
             name="Test",
             sort_code="04-00-04",
             account_number="12345678",
-            bank="Test Bank",
-            link="https://example.com?amount={amount}",
-            QR_code="https://example.com/qr?amount={amount}"
+            bank="Test Bank"
         )
         assert details.sort_code == "040004"
 
@@ -100,9 +98,7 @@ class TestBankDetails:
             name="Test",
             sort_code="04 00 04",
             account_number="12345678",
-            bank="Test Bank",
-            link="https://example.com?amount={amount}",
-            QR_code="https://example.com/qr?amount={amount}"
+            bank="Test Bank"
         )
         assert details.sort_code == "040004"
 
@@ -121,9 +117,7 @@ class TestBankDetails:
                 name="Test",
                 sort_code="04-AB-04",
                 account_number="12345678",
-                bank="Test Bank",
-                link="https://example.com?amount={amount}",
-                QR_code="https://example.com/qr?amount={amount}"
+                bank="Test Bank"
             )
         assert "6 digits" in str(exc_info.value)
 
@@ -133,9 +127,7 @@ class TestBankDetails:
             name="Test",
             sort_code="040004",
             account_number="1234 5678",
-            bank="Test Bank",
-            link="https://example.com?amount={amount}",
-            QR_code="https://example.com/qr?amount={amount}"
+            bank="Test Bank"
         )
         assert details.account_number == "12345678"
 
@@ -146,9 +138,7 @@ class TestBankDetails:
                 name="Test",
                 sort_code="040004",
                 account_number="1234567",  # 7 digits
-                bank="Test Bank",
-                link="https://example.com?amount={amount}",
-                QR_code="https://example.com/qr?amount={amount}"
+                bank="Test Bank"
             )
         assert "8 digits" in str(exc_info.value)
 
@@ -159,32 +149,9 @@ class TestBankDetails:
                 name="Test",
                 sort_code="040004",
                 account_number="1234ABCD",
-                bank="Test Bank",
-                link="https://example.com?amount={amount}",
-                QR_code="https://example.com/qr?amount={amount}"
+                bank="Test Bank"
             )
         assert "8 digits" in str(exc_info.value)
-
-    def test_link_missing_placeholder(
-        self, invalid_bank_details_no_placeholder
-    ):
-        """Link without {amount} placeholder should raise ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            BankDetails(**invalid_bank_details_no_placeholder)
-        assert "{amount}" in str(exc_info.value)
-
-    def test_qr_code_missing_placeholder(self):
-        """QR code without {amount} placeholder should raise ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            BankDetails(
-                name="Test",
-                sort_code="040004",
-                account_number="12345678",
-                bank="Test Bank",
-                link="https://example.com?amount={amount}",
-                QR_code="https://example.com/qr"  # Missing {amount}
-            )
-        assert "{amount}" in str(exc_info.value)
 
     def test_formatted_sort_code_property(self):
         """formatted_sort_code should format as XX-XX-XX."""
@@ -192,9 +159,7 @@ class TestBankDetails:
             name="Test",
             sort_code="040004",
             account_number="12345678",
-            bank="Test Bank",
-            link="https://example.com?amount={amount}",
-            QR_code="https://example.com/qr?amount={amount}"
+            bank="Test Bank"
         )
         assert details.formatted_sort_code == "04-00-04"
 
@@ -204,9 +169,7 @@ class TestBankDetails:
             name="Test",
             sort_code="040004",
             account_number="12345678",
-            bank="Test Bank",
-            link="https://example.com?amount={amount}",
-            QR_code="https://example.com/qr?amount={amount}"
+            bank="Test Bank"
         )
         assert details.formatted_account_number == "1234 5678"
 

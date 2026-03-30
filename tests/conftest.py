@@ -31,9 +31,7 @@ def sample_bank_details() -> dict[str, str]:
         "name": "Test User",
         "sort_code": "04-00-04",
         "account_number": "1234 5678",
-        "bank": "Test Bank",
-        "link": "https://example.com/pay?amount={amount}",
-        "QR_code": "https://example.com/qr?amount={amount}"
+        "bank": "Test Bank"
     }
 
 
@@ -127,22 +125,7 @@ def invalid_bank_details_bad_sort_code() -> dict[str, Any]:
         "name": "Test User",
         "sort_code": "12345",  # Invalid: must be 6 digits
         "account_number": "12345678",
-        "bank": "Test Bank",
-        "link": "https://example.com/pay?amount={amount}",
-        "QR_code": "https://example.com/qr?amount={amount}"
-    }
-
-
-@pytest.fixture
-def invalid_bank_details_no_placeholder() -> dict[str, Any]:
-    """Bank details missing {amount} placeholder in link."""
-    return {
-        "name": "Test User",
-        "sort_code": "040004",
-        "account_number": "12345678",
-        "bank": "Test Bank",
-        "link": "https://example.com/pay",  # Missing {amount}
-        "QR_code": "https://example.com/qr?amount={amount}"
+        "bank": "Test Bank"
     }
 
 
@@ -306,9 +289,7 @@ def sample_bank_details_model():
         name="Test User",
         sort_code="04-00-04",  # Will be normalized to "040004"
         account_number="1234 5678",  # Will be normalized to "12345678"
-        bank="Test Bank",
-        link="https://example.com/pay?amount={amount}",
-        QR_code="https://example.com/qr?amount={amount}"
+        bank="Test Bank"
     )
 
 

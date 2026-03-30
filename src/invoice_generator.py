@@ -126,11 +126,6 @@ def write_invoices(
         # Only include bank details for private clients, not agencies
         deets = True # always include payment information
 
-        # Generate QR code and payment link dynamically based on amount owed
-        # QR code uses pence (amount * 100), payment link uses pounds
-        QR_code = bank_details.QR_code.format(amount=int(total_charge * 100))
-        link = bank_details.link.format(amount=total_charge)
-
         # Substitute lesson information into template HTML
         rendered_html = template.render(
             student=student,
@@ -140,8 +135,6 @@ def write_invoices(
             rate=rate,
             total_charge=total_charge,
             deets=deets,
-            link=link if deets else "",
-            QR_code=QR_code if deets else "",
             name=bank_details.name if deets else "",
             sort_code=bank_details.formatted_sort_code if deets else "",
             account_number=bank_details.formatted_account_number if deets else "",

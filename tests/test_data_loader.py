@@ -70,7 +70,7 @@ class TestLoadJsonWithModel:
         invalid_data = {
             "name": "Test User",
             "sort_code": "040004",
-            # Missing account_number, bank, link, QR_code
+            # Missing account_number, bank
         }
         test_file = tmp_path / "invalid.json"
         test_file.write_text(json.dumps(invalid_data))
@@ -91,9 +91,7 @@ class TestLoadJsonWithModel:
             "name": "Test User",
             "sort_code": "12345",  # Invalid: must be 6 digits
             "account_number": "12345678",
-            "bank": "Test Bank",
-            "link": "https://example.com?amount={amount}",
-            "QR_code": "https://example.com/qr?amount={amount}"
+            "bank": "Test Bank"
         }
         test_file = tmp_path / "invalid.json"
         test_file.write_text(json.dumps(invalid_data))
@@ -198,9 +196,7 @@ class TestLoadBankDetails:
             "name": "Test User",
             "sort_code": "04-00-04",
             "account_number": "12345678",
-            "bank": "Test Bank",
-            "link": "https://example.com?amount={amount}",
-            "QR_code": "https://example.com/qr?amount={amount}"
+            "bank": "Test Bank"
         }
         test_file = tmp_path / "bank_details.json"
         test_file.write_text(json.dumps(valid_bank))
@@ -219,9 +215,7 @@ class TestLoadBankDetails:
             "name": "Test User",
             "sort_code": "040004",
             "account_number": "12345678",
-            "bank": "Test Bank",
-            "link": "https://example.com?amount={amount}",
-            "QR_code": "https://example.com/qr?amount={amount}"
+            "bank": "Test Bank"
         }
         test_file = tmp_path / "bank_details.json"
         test_file.write_text(json.dumps(valid_bank))
@@ -251,9 +245,7 @@ class TestLoadBankDetails:
             "name": "Test User",
             "sort_code": "12345",  # Invalid: must be 6 digits
             "account_number": "12345678",
-            "bank": "Test Bank",
-            "link": "https://example.com?amount={amount}",
-            "QR_code": "https://example.com/qr?amount={amount}"
+            "bank": "Test Bank"
         }
         test_file = tmp_path / "bank_details.json"
         test_file.write_text(json.dumps(invalid_bank))
