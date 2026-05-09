@@ -39,7 +39,14 @@ git clone https://github.com/baiway/invoice-generator.git
 cd invoice-generator
 ```
 
-**3. Install dependencies:**
+**3. (macOS only) Install WeasyPrint system libraries via Homebrew:**
+```shell
+brew install weasyprint
+```
+
+WeasyPrint requires several system libraries (Cairo, Pango, etc.) that are not bundled with the Python package. The project's `.env` file sets `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` so that `uv run` can find them automatically.
+
+**4. Install dependencies:**
 ```shell
 uv sync
 ```
@@ -221,9 +228,13 @@ invoice-generator/
 
 ## Troubleshooting
 
-### weasyprint Installation Issues
+### WeasyPrint installation issues (macOS)
 
-If you experience issues with `weasyprint` on macOS, see: [gobject-2.0-0 not able to load on macbook](https://stackoverflow.com/questions/69097224/gobject-2-0-0-not-able-to-load-on-macbook/69295303#69295303) on Stack Overflow.
+WeasyPrint requires system libraries that must be installed separately via Homebrew (see step 3 above). The `.env` file in this repo sets `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib`, which `uv run` loads automatically so Python can locate them at runtime.
+
+If you still see library errors, refer to the official WeasyPrint docs:
+- [Installation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation)
+- [Troubleshooting](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting)
 
 ### Pydantic Validation Errors
 
