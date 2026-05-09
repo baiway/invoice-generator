@@ -30,8 +30,8 @@ dev = [
     "types-beautifulsoup4",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "mypy>=1.8.0",
