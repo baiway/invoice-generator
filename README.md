@@ -40,11 +40,20 @@ cd invoice-generator
 ```
 
 **3. (macOS only) Install WeasyPrint system libraries via Homebrew:**
+
+WeasyPrint requires several system libraries (Cairo, Pango, etc.) that are not bundled with the Python package.
+
 ```shell
 brew install weasyprint
 ```
 
-WeasyPrint requires several system libraries (Cairo, Pango, etc.) that are not bundled with the Python package. The project's `.env` file sets `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` so that `uv run` can find them automatically.
+Then expose those libraries to Python by adding the following to your shell profile (`~/.zshrc` or `~/.bashrc`) and restarting your shell:
+
+```shell
+export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_FALLBACK_LIBRARY_PATH
+```
+
+Alternatively, if you don't want to modify your shell profile, the repo includes a `.env` file with the same value and you can pass it to uv: `uv run --env-file .env generate-invoices.py ...`.
 
 **4. Install dependencies:**
 ```shell
@@ -230,7 +239,7 @@ invoice-generator/
 
 ### WeasyPrint installation issues (macOS)
 
-WeasyPrint requires system libraries that must be installed separately via Homebrew (see step 3 above). The `.env` file in this repo sets `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib`, which `uv run` loads automatically so Python can locate them at runtime.
+WeasyPrint requires system libraries that must be installed separately via Homebrew, and Python needs `DYLD_FALLBACK_LIBRARY_PATH` set so it can find them at runtime — see step 3 of the uv installation section above.
 
 If you still see library errors, refer to the official WeasyPrint docs:
 - [Installation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation)

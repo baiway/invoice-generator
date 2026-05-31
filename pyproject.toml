@@ -30,9 +30,6 @@ dev = [
     "types-beautifulsoup4",
 ]
 
-[tool.uv]
-env-file = ".env"
-
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
