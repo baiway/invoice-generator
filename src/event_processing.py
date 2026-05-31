@@ -249,9 +249,14 @@ def process_events(
         lessons, columns=["student", "start", "end", "rate", "client_type"]
     )
 
-    # Convert start and end columns to datetime for proper handling
-    df["start"] = pd.to_datetime(df["start"], utc=True)
-    df["end"] = pd.to_datetime(df["end"], utc=True)
+    # Convert start and end columns to datetime for proper handling.
+    # `df.assign` returns a new DataFrame, avoiding a spurious
+    # ChainedAssignmentError FutureWarning that pandas 2.2.x raises for
+    # `df["col"] = pd.to_datetime(df["col"], ...)`.
+    df = df.assign(
+        start=pd.to_datetime(df["start"], utc=True),
+        end=pd.to_datetime(df["end"], utc=True),
+    )
 
     logger.info(f"Processed {len(df)} lessons from {len(events)} events")
     return df
