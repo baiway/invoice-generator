@@ -84,6 +84,7 @@ def fetch_events(
             timeMax=end_date.isoformat() + "Z",
             singleEvents=True,
             orderBy="startTime",
+            showDeleted=False,
         )
         .execute()
     )

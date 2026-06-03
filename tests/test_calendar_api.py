@@ -323,6 +323,24 @@ class TestFetchEvents:
         assert call_kwargs["singleEvents"] is True
         assert call_kwargs["orderBy"] == "startTime"
 
+    def test_excludes_deleted_events(self):
+        """Should pass showDeleted=False so cancellation tombstones are excluded."""
+        mock_service = MagicMock()
+        mock_events = MagicMock()
+        mock_list = MagicMock()
+
+        mock_service.events.return_value = mock_events
+        mock_events.list.return_value = mock_list
+        mock_list.execute.return_value = {"items": []}
+
+        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+
+        fetch_events(mock_service, start, end)
+
+        call_kwargs = mock_events.list.call_args[1]
+        assert call_kwargs["showDeleted"] is False
+
     def test_returns_items_list(self):
         """Should return the items list from API response."""
         mock_service = MagicMock()

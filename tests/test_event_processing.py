@@ -7,6 +7,7 @@ from src.event_processing import (
     classify_event,
     extract_blue_education_name,
     extract_in_person_name,
+    is_billable,
     match_attendee_email,
 )
 
@@ -84,6 +85,61 @@ class TestExtractInPersonName:
     def test_whitespace_handling(self):
         """Leading/trailing whitespace should be stripped."""
         assert extract_in_person_name("Tutoring  Alice  ") == "Alice"
+
+
+class TestIsBillable:
+    """Tests for is_billable filter that excludes cancelled events."""
+
+    def test_confirmed_event_is_billable(self):
+        event = {
+            "status": "confirmed",
+            "summary": "Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+        }
+        assert is_billable(event) is True
+
+    def test_cancelled_status_is_not_billable(self):
+        event = {
+            "status": "cancelled",
+            "summary": "Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+        }
+        assert is_billable(event) is False
+
+    def test_canceled_summary_prefix_is_not_billable(self):
+        event = {
+            "status": "confirmed",
+            "summary": "Canceled: Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+        }
+        assert is_billable(event) is False
+
+    def test_cancelled_summary_prefix_is_not_billable(self):
+        event = {
+            "status": "confirmed",
+            "summary": "Cancelled: Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+        }
+        assert is_billable(event) is False
+
+    def test_both_cancelled_status_and_summary_prefix_is_not_billable(self):
+        event = {
+            "status": "cancelled",
+            "summary": "Cancelled: Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+        }
+        assert is_billable(event) is False
+
+    def test_summary_prefix_check_is_case_insensitive(self):
+        event = {"status": "confirmed", "summary": "CANCELLED: Some session"}
+        assert is_billable(event) is False
+
+    def test_missing_status_field_defaults_to_billable(self):
+        event = {"summary": "Some session"}
+        assert is_billable(event) is True
+
+    def test_empty_summary_is_still_billable(self):
+        event = {"status": "confirmed", "summary": ""}
+        assert is_billable(event) is True
+
+    def test_none_summary_is_still_billable(self):
+        event = {"status": "confirmed", "summary": None}
+        assert is_billable(event) is True
 
 
 class TestMatchAttendeeEmail:
@@ -447,6 +503,47 @@ class TestProcessEvents:
 
         assert len(df) == 0
         assert list(df.columns) == ["student", "start", "end", "rate", "client_type"]
+
+    def test_cancelled_events_excluded_from_dataframe(
+        self, sample_students_data, sample_contact_details_model
+    ):
+        """Cancelled events should be filtered out before invoice generation."""
+        from src.event_processing import process_events
+
+        events = [
+            {
+                "summary": "Tutoring Alice Smith",
+                "status": "confirmed",
+                "attendees": [{"email": "tutor@example.com", "self": True}],
+                "start": {"dateTime": "2024-01-15T10:00:00Z"},
+                "end": {"dateTime": "2024-01-15T11:00:00Z"},
+            },
+            {
+                "summary": "Tutoring Alice Smith",
+                "status": "cancelled",
+                "attendees": [{"email": "tutor@example.com", "self": True}],
+                "start": {"dateTime": "2024-01-16T10:00:00Z"},
+                "end": {"dateTime": "2024-01-16T11:00:00Z"},
+            },
+            {
+                "summary": "Cancelled: Tutoring Alice Smith",
+                "status": "confirmed",
+                "attendees": [{"email": "tutor@example.com", "self": True}],
+                "start": {"dateTime": "2024-01-17T10:00:00Z"},
+                "end": {"dateTime": "2024-01-17T11:00:00Z"},
+            },
+        ]
+
+        df = process_events(
+            events,
+            sample_students_data,
+            [],
+            sample_contact_details_model,
+        )
+
+        assert len(df) == 1
+        assert df.iloc[0]["student"] == "Alice Smith"
+        assert df.iloc[0]["start"].strftime("%Y-%m-%d") == "2024-01-15"
 
     def test_logging_summary_processed_lessons(
         self, sample_students_data, sample_contact_details_model, caplog

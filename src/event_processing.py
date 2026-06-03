@@ -7,7 +7,7 @@ different client types.
 """
 
 import pandas as pd
-from typing import Any, Optional
+from typing import Any
 
 from src.models import StudentInfo, ContactDetails
 from src.logging_config import get_logger
@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 def classify_event(
     event_title: str,
     attendees: list[dict[str, Any]],
-) -> tuple[str, Optional[str]]:
+) -> tuple[str, str | None]:
     """
     Classify a calendar event and extract the student name.
 
@@ -105,10 +105,35 @@ def extract_in_person_name(event_title: str) -> str:
     return event_title.split("Tutoring ", 1)[1].strip()
 
 
+def is_billable(event: dict[str, Any]) -> bool:
+    """Return True if a Google Calendar event should be invoiced.
+
+    Filters out cancelled events via two checks:
+    1. `status == "cancelled"` — Google Calendar's tombstone marker.
+    2. Summary prefixed with "Canceled:" or "Cancelled:" (case-insensitive) —
+       Apple Calendar prepends this in some edge cases where the status
+       doesn't propagate.
+
+    The filter exists because Blue Education's `.ics` booking attachments
+    lack the `METHOD` property required by RFC 5546 (iTIP), so Apple
+    Calendar imports them with mixed semantics. Deleting one of these
+    events from Calendar.app sometimes leaves a tombstone in Google
+    Calendar rather than fully removing it, and that tombstone otherwise
+    leaks into invoice generation. See
+    `invoice-generator-cancellation-fix.md` for the full incident write-up.
+    """
+    if event.get("status") == "cancelled":
+        return False
+    summary = (event.get("summary") or "").lower()
+    if summary.startswith(("canceled:", "cancelled:")):
+        return False
+    return True
+
+
 def match_attendee_email(
     attendees: list[dict[str, Any]],
     student_data: dict[str, StudentInfo],
-) -> Optional[str]:
+) -> str | None:
     """
     Match event attendees to students via email addresses.
 
@@ -194,13 +219,19 @@ def process_events(
 
     # Process events
     for event in events:
+        if not is_billable(event):
+            logger.debug(
+                f"Skipping cancelled event: {event.get('summary') or '<no title>'}"
+            )
+            continue
+
         event_title = event.get("summary", "")
         if not event_title:
             logger.debug("Skipping event with no title")
             continue
 
         attendees = event.get("attendees", [])
-        student_name: Optional[str] = None
+        student_name: str | None = None
 
         # Classify event and extract student name
         event_type, extracted_name = classify_event(event_title, attendees)
