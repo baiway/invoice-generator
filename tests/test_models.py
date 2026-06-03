@@ -72,6 +72,79 @@ class TestStudentInfo:
         student3 = StudentInfo(client_type="private", rate=123.456, emails=[])
         assert student3.formatted_rate == "123.46"
 
+    def test_phone_numbers_defaults_to_empty_list(self):
+        """phone_numbers is optional and defaults to an empty list."""
+        student = StudentInfo(client_type="private", rate=50.0, emails=[])
+        assert student.phone_numbers == []
+
+    def test_phone_numbers_valid_e164(self):
+        """E.164-formatted phone numbers should be accepted."""
+        student = StudentInfo(
+            client_type="private",
+            rate=50.0,
+            emails=[],
+            phone_numbers=["+447700900123"],
+        )
+        assert student.phone_numbers == ["+447700900123"]
+
+    def test_phone_numbers_multiple_entries(self):
+        """Multiple E.164 entries should all be accepted (parent + student)."""
+        student = StudentInfo(
+            client_type="private",
+            rate=50.0,
+            emails=[],
+            phone_numbers=["+447700900001", "+447700900002"],
+        )
+        assert student.phone_numbers == ["+447700900001", "+447700900002"]
+
+    @pytest.mark.parametrize("bad", [
+        "07700900123",       # missing country code prefix
+        "+44 7700 900123",   # contains spaces
+        "+44-7700-900123",   # contains dashes
+        "+0447700900123",    # leading zero after +
+        "+",                 # empty number body
+        "+4477009001234567", # too long (>15 digits)
+        "+4477",             # too short (<8 digits)
+        "447700900123",      # no '+'
+    ])
+    def test_phone_numbers_rejects_non_e164_entries(self, bad):
+        """Any non-E.164 entry in the list should raise ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            StudentInfo(
+                client_type="private",
+                rate=50.0,
+                emails=[],
+                phone_numbers=[bad],
+            )
+        assert "E.164" in str(exc_info.value)
+
+    def test_phone_numbers_rejects_when_any_entry_invalid(self):
+        """A valid + invalid pair must reject the whole list."""
+        with pytest.raises(ValidationError):
+            StudentInfo(
+                client_type="private",
+                rate=50.0,
+                emails=[],
+                phone_numbers=["+447700900001", "not-e164"],
+            )
+
+    def test_opt_out_flags_default_false(self):
+        """nudge_opt_out and digest_opt_out default to False."""
+        student = StudentInfo(client_type="private", rate=50.0, emails=[])
+        assert student.nudge_opt_out is False
+        assert student.digest_opt_out is False
+
+    def test_opt_out_flags_can_be_set(self):
+        student = StudentInfo(
+            client_type="private",
+            rate=50.0,
+            emails=[],
+            nudge_opt_out=True,
+            digest_opt_out=True,
+        )
+        assert student.nudge_opt_out is True
+        assert student.digest_opt_out is True
+
 
 class TestBankDetails:
     """Tests for BankDetails model validation and formatting."""
@@ -280,9 +353,9 @@ class TestStudentsData:
         assert "Bob Jones" in students.root
 
     def test_iteration(self, sample_students_data):
-        """Should support iteration over student names."""
+        """Should support iteration over student names via .keys()."""
         students = StudentsData(root=sample_students_data)
-        names = list(students)
+        names = list(students.keys())
         assert "Alice Smith" in names
         assert "Bob Jones" in names
 
