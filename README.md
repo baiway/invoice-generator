@@ -146,7 +146,15 @@ generate-invoices --from 2024-01-01 --to 2024-01-31
 
 # Custom start date (end defaults to today)
 generate-invoices --from 2024-01-01
+
+# Read configuration from somewhere else, write invoices somewhere else
+generate-invoices --data-dir ~/tutoring/data --output-dir ~/tutoring/invoices
 ```
+
+Paths are resolved against the directory you run the command from, so
+`generate-invoices` run in `~/tutoring` reads `~/tutoring/data/students.json`
+and writes to `~/tutoring/invoices/` unless told otherwise. The detailed log
+(`invoice-generator.log`) is likewise written to the current directory.
 
 For all options:
 ```shell
@@ -163,7 +171,7 @@ Invoices are saved as PDFs in the `invoices/` directory:
 
 ### Running Tests
 
-The project has a comprehensive test suite with **189 tests** achieving **99% code coverage**.
+The project has a comprehensive test suite with **194 tests** achieving **99% code coverage**.
 
 The tests import the installed `invoice_generator` package rather than the
 source directory, so the project itself must be installed first — `uv sync`

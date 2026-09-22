@@ -75,9 +75,12 @@ def load_json_with_model(
         ) from e
 
 
-def load_student_data() -> dict[str, StudentInfo]:
+def load_student_data(path: str | None = None) -> dict[str, StudentInfo]:
     """
     Load and validate student data from students.json.
+
+    Args:
+        path: Path to the file. Defaults to `STUDENTS_FILE`.
 
     Returns:
         Dictionary mapping student names to StudentInfo objects
@@ -88,15 +91,18 @@ def load_student_data() -> dict[str, StudentInfo]:
     """
     students_model = load_json_with_model(
         StudentsData,
-        STUDENTS_FILE,
+        path or STUDENTS_FILE,
         "students.json"
     )
     return students_model.root
 
 
-def load_bank_details() -> BankDetails:
+def load_bank_details(path: str | None = None) -> BankDetails:
     """
     Load and validate bank details from bank_details.json.
+
+    Args:
+        path: Path to the file. Defaults to `BANK_DETAILS_FILE`.
 
     Returns:
         BankDetails instance
@@ -107,14 +113,17 @@ def load_bank_details() -> BankDetails:
     """
     return load_json_with_model(
         BankDetails,
-        BANK_DETAILS_FILE,
+        path or BANK_DETAILS_FILE,
         "bank_details.json"
     )
 
 
-def load_contact_details() -> ContactDetails:
+def load_contact_details(path: str | None = None) -> ContactDetails:
     """
     Load and validate contact details from contact_details.json.
+
+    Args:
+        path: Path to the file. Defaults to `CONTACT_DETAILS_FILE`.
 
     Returns:
         ContactDetails instance
@@ -125,6 +134,6 @@ def load_contact_details() -> ContactDetails:
     """
     return load_json_with_model(
         ContactDetails,
-        CONTACT_DETAILS_FILE,
+        path or CONTACT_DETAILS_FILE,
         "contact_details.json"
     )

@@ -79,22 +79,24 @@ def write_invoices(
     start_date: datetime,
     end_date: datetime,
     bank_details: BankDetails,
-    contact_details: ContactDetails
+    contact_details: ContactDetails,
+    output_dir: str | None = None
 ) -> str:
     """Generates and writes invoice as PDFs for specified students over the invoice period.
 
     Args:
-        output_dir: Directory to write PDF invoices to
         lessons: DataFrame containing lesson information
         start_date: Start of invoice period
         end_date: End of invoice period
         bank_details: BankDetails model with payment information
         contact_details: ContactDetails model with contact information
+        output_dir: Directory to write PDF invoices to. Defaults to
+            `OUTPUT_DIR`.
     """
     # Create output directory if it does not already exist
-    output_dir = Path(OUTPUT_DIR)
-    if not output_dir.exists():
-        output_dir.mkdir(parents=True)
+    output_path = Path(output_dir or OUTPUT_DIR)
+    if not output_path.exists():
+        output_path.mkdir(parents=True)
     # Initialise Jinja2 (templating) and WeasyPrint (generating PDFs)
     # and add custom filters
     env = Environment(
@@ -164,7 +166,7 @@ def write_invoices(
         if client_type == "private":
             html = HTML(string=rendered_html)
             filename = f"{str(student).lower()}-invoice.pdf".replace(" ", "-")
-            html.write_pdf(output_dir / filename, stylesheets=[css])
+            html.write_pdf(output_path / filename, stylesheets=[css])
             logger.info(f"Generated invoice for {student}")
         else:
             # Extract the content inside the <div class="container">
@@ -200,10 +202,10 @@ def write_invoices(
              invoices += page
         html = HTML(string=outer_html.format(content=invoices))
         filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
-        html.write_pdf(output_dir / filename, stylesheets=[css])
+        html.write_pdf(output_path / filename, stylesheets=[css])
         logger.info(f"Generated combined invoice for {agency}")
 
-    return str(output_dir.resolve())
+    return str(output_path.resolve())
 
 def print_inactive_students(
     lessons: pd.DataFrame,

@@ -5,13 +5,23 @@ This module centralizes magic strings and configuration values used throughout
 the application, making them easier to maintain and test.
 """
 
-# File paths
+# File paths. `DATA_DIR` and `OUTPUT_DIR` are deliberately relative: they
+# resolve against the directory the command is run from, so invoices land
+# beside the data they were generated from. The CLI's `--data-dir` and
+# `--output-dir` flags override them.
 DATA_DIR = "data"
-STUDENTS_FILE = f"{DATA_DIR}/students.json"
-BANK_DETAILS_FILE = f"{DATA_DIR}/bank_details.json"
-CONTACT_DETAILS_FILE = f"{DATA_DIR}/contact_details.json"
-CREDENTIALS_FILE = f"{DATA_DIR}/credentials.json"
-TOKEN_FILE = f"{DATA_DIR}/token.json"
+
+STUDENTS_FILENAME = "students.json"
+BANK_DETAILS_FILENAME = "bank_details.json"
+CONTACT_DETAILS_FILENAME = "contact_details.json"
+CREDENTIALS_FILENAME = "credentials.json"
+TOKEN_FILENAME = "token.json"
+
+STUDENTS_FILE = f"{DATA_DIR}/{STUDENTS_FILENAME}"
+BANK_DETAILS_FILE = f"{DATA_DIR}/{BANK_DETAILS_FILENAME}"
+CONTACT_DETAILS_FILE = f"{DATA_DIR}/{CONTACT_DETAILS_FILENAME}"
+CREDENTIALS_FILE = f"{DATA_DIR}/{CREDENTIALS_FILENAME}"
+TOKEN_FILE = f"{DATA_DIR}/{TOKEN_FILENAME}"
 
 # Templates ship inside the package; these name the resource, not a path
 TEMPLATE_PACKAGE = "invoice_generator"

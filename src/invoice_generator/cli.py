@@ -9,6 +9,7 @@ command; see `[project.scripts]` in `pyproject.toml`.
 import json
 import argparse
 from datetime import datetime
+from pathlib import Path
 from rich.console import Console
 
 from invoice_generator.calendar_api import authenticate, fetch_events
@@ -17,7 +18,15 @@ from invoice_generator.utils import get_last_full_month
 from invoice_generator.invoice_generator import write_invoices, print_inactive_students
 from invoice_generator.data_loader import load_student_data, load_bank_details, load_contact_details
 from invoice_generator.logging_config import setup_logging, get_logger
-from invoice_generator.constants import OUTPUT_DIR
+from invoice_generator.constants import (
+    BANK_DETAILS_FILENAME,
+    CONTACT_DETAILS_FILENAME,
+    CREDENTIALS_FILENAME,
+    DATA_DIR,
+    OUTPUT_DIR,
+    STUDENTS_FILENAME,
+    TOKEN_FILENAME,
+)
 
 logger = get_logger(__name__)
 console = Console()
@@ -51,6 +60,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
     )
     parser.add_argument(
+        "--data-dir",
+        default=DATA_DIR,
+        metavar="path",
+        help=(
+            "Directory holding `students.json`, `bank_details.json`, "
+            "`contact_details.json` and the Google credentials. Relative "
+            f"paths are resolved against the current directory (default: "
+            f"`{DATA_DIR}`)."
+        )
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=OUTPUT_DIR,
+        metavar="path",
+        help=(
+            "Directory to write the PDF invoices to, created if it does not "
+            "exist. Relative paths are resolved against the current "
+            f"directory (default: `{OUTPUT_DIR}`)."
+        )
+    )
+    parser.add_argument(
         "--from",
         dest="start",
         help=(
@@ -77,7 +107,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     return parser.parse_args(argv)
 
-def validate_students(student_list: list[str]) -> list[str]:
+def validate_students(
+    student_list: list[str],
+    students_file: str | Path | None = None,
+) -> list[str]:
     """Validates student names supplied via the CLI using the `--only`
     flag. If `student_list` is empty (i.e. `--only` not used), simply
     returns `student_list` as invoices will be generated for all
@@ -85,11 +118,19 @@ def validate_students(student_list: list[str]) -> list[str]:
     validation is needed. Otherwise, verifies that all names in
     `student_list` exist in `students.json`. If any names do not exist,
     a ValueError is raised with the unrecognised names.
+
+    Args:
+        student_list: Names passed to `--only`.
+        students_file: Path to `students.json`. Defaults to the file in
+            `DATA_DIR`.
     """
     if student_list == []:
         return student_list
 
-    with open("data/students.json", "r") as f:
+    if students_file is None:
+        students_file = Path(DATA_DIR) / STUDENTS_FILENAME
+
+    with open(students_file, "r") as f:
         student_data = json.load(f)
 
     student_keys = {name for name in student_data.keys()}
@@ -139,19 +180,27 @@ def main(argv: list[str] | None = None) -> None:
 
     # Parse and validate command line arguments
     args = parse_args(argv)
-    students_to_invoice = validate_students(args.only)
+    data_dir = Path(args.data_dir)
+    students_to_invoice = validate_students(
+        args.only, data_dir / STUDENTS_FILENAME
+    )
     start_date, end_date = validate_invoice_period(args.start, args.end)
 
     # Load and validate JSON data files
     logger.info("Loading configuration files...")
-    student_data = load_student_data()
-    bank_details = load_bank_details()
-    contact_details = load_contact_details()
+    student_data = load_student_data(str(data_dir / STUDENTS_FILENAME))
+    bank_details = load_bank_details(str(data_dir / BANK_DETAILS_FILENAME))
+    contact_details = load_contact_details(
+        str(data_dir / CONTACT_DETAILS_FILENAME)
+    )
     console.print("[green]✓[/green] [cyan]Configuration files loaded[/cyan]")
 
     # Authenticate Google Calendar
     logger.info("Authenticating with Google Calendar...")
-    service = authenticate()
+    service = authenticate(
+        str(data_dir / CREDENTIALS_FILENAME),
+        str(data_dir / TOKEN_FILENAME),
+    )
     console.print("[green]✓[/green] [cyan]Authenticated with Google[/cyan]")
 
     # Fetch all Google Calendar events over the invoice period
@@ -178,7 +227,7 @@ def main(argv: list[str] | None = None) -> None:
     # Write invoices
     logger.info("Writing invoices...")
     invoices = write_invoices(lessons, start_date, end_date, bank_details,
-                              contact_details)
+                              contact_details, args.output_dir)
     logger.info(f"Invoices saved to: {invoices}")
     console.print(f"\n[cyan]Invoices saved to:[/cyan] {invoices}")
     console.print(f"[cyan]Detailed logs:[/cyan] {log_file}\n")

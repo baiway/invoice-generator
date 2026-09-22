@@ -22,12 +22,20 @@ from invoice_generator.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-def authenticate() -> Resource:
+def authenticate(
+    credentials_file: str | None = None,
+    token_file: str | None = None,
+) -> Resource:
     """Authenticate using Google's API.
 
     Expects `credentials.json` in the `data/` directory and uses
     `token.json` (also in the `data` directory) for subsequent
     authentication.
+
+    Args:
+        credentials_file: Path to credentials.json. Defaults to
+            `CREDENTIALS_FILE`.
+        token_file: Path to token.json. Defaults to `TOKEN_FILE`.
 
     Returns:
         Google Calendar service object
@@ -35,8 +43,8 @@ def authenticate() -> Resource:
     Raises:
         FileNotFoundError: If credentials.json is not found
     """
-    creds_path = Path(CREDENTIALS_FILE)
-    token_path = Path(TOKEN_FILE)
+    creds_path = Path(credentials_file or CREDENTIALS_FILE)
+    token_path = Path(token_file or TOKEN_FILE)
     SCOPES = GOOGLE_CALENDAR_SCOPES
 
     if not creds_path.is_file():

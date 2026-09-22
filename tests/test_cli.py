@@ -8,6 +8,7 @@ validation against `students.json`, and invoice period resolution.
 import json
 import pytest
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from invoice_generator.cli import (
@@ -53,6 +54,19 @@ class TestParseArgs:
         assert args.start == "2024-01-01"
         assert args.end == "2024-01-31"
 
+    def test_directories_default_to_cwd_relative_paths(self):
+        """Data and output directories default to the documented names."""
+        args = parse_args([])
+        assert args.data_dir == "data"
+        assert args.output_dir == "invoices"
+
+    def test_directories_can_be_overridden(self):
+        """`--data-dir` and `--output-dir` should be honoured."""
+        args = parse_args(["--data-dir", "/srv/tutoring",
+                           "--output-dir", "/srv/invoices"])
+        assert args.data_dir == "/srv/tutoring"
+        assert args.output_dir == "/srv/invoices"
+
     def test_unknown_flag_exits(self):
         """argparse should reject unrecognised flags."""
         with pytest.raises(SystemExit):
@@ -70,6 +84,15 @@ class TestValidateStudents:
     def test_known_names_are_accepted(self, students_file):
         """Names present in students.json should be returned as given."""
         assert validate_students(["Alice Smith"]) == ["Alice Smith"]
+
+    def test_explicit_students_file_is_used(self, tmp_path, monkeypatch):
+        """An explicit path should be read instead of the default one."""
+        elsewhere = tmp_path / "config" / "students.json"
+        elsewhere.parent.mkdir()
+        elsewhere.write_text(json.dumps({"Carol Brown": {}}))
+        monkeypatch.chdir(tmp_path)  # no ./data/students.json here
+
+        assert validate_students(["Carol Brown"], elsewhere) == ["Carol Brown"]
 
     def test_unknown_name_raises(self, students_file):
         """An unrecognised name should raise, naming the offender."""
@@ -143,7 +166,7 @@ class TestMain:
             mocks[name] = mock
         mocks["setup_logging"].return_value = "invoice-generator.log"
         mocks["write_invoices"].return_value = "invoices"
-        mocks["validate_students"].side_effect = lambda names: names
+        mocks["validate_students"].side_effect = lambda names, path: names
         return mocks
 
     def test_runs_the_pipeline_in_order(self, pipeline):
@@ -171,9 +194,31 @@ class TestMain:
             pipeline["load_student_data"].return_value,
         )
 
+    def test_data_dir_flag_reaches_every_loader(self, pipeline):
+        """`--data-dir` should redirect all four data files."""
+        main(["--data-dir", "/srv/tutoring"])
+
+        assert (pipeline["load_student_data"].call_args.args[0]
+                == "/srv/tutoring/students.json")
+        assert (pipeline["load_bank_details"].call_args.args[0]
+                == "/srv/tutoring/bank_details.json")
+        assert (pipeline["load_contact_details"].call_args.args[0]
+                == "/srv/tutoring/contact_details.json")
+        assert pipeline["authenticate"].call_args.args == (
+            "/srv/tutoring/credentials.json", "/srv/tutoring/token.json"
+        )
+
+    def test_output_dir_flag_reaches_the_renderer(self, pipeline):
+        """`--output-dir` should be passed to write_invoices."""
+        main(["--output-dir", "/srv/invoices"])
+
+        assert pipeline["write_invoices"].call_args.args[-1] == "/srv/invoices"
+
     def test_skips_inactive_report_when_filtering(self, pipeline):
         """With `--only`, the inactive student report is not wanted."""
         main(["--only", "Alice Smith"])
 
-        pipeline["validate_students"].assert_called_once_with(["Alice Smith"])
+        pipeline["validate_students"].assert_called_once_with(
+            ["Alice Smith"], Path("data") / "students.json"
+        )
         pipeline["print_inactive_students"].assert_not_called()
