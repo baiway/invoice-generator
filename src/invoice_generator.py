@@ -11,7 +11,6 @@ import calendar
 from datetime import datetime
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from weasyprint import HTML, CSS
 from bs4 import BeautifulSoup
 from typing import Any
 from rich.progress import track
@@ -26,6 +25,14 @@ from src.formatting import (
 from src.constants import OUTPUT_DIR
 from src.models import BankDetails, ContactDetails, StudentInfo
 from src.logging_config import get_logger
+from src.weasyprint_libs import configure_library_path
+
+# Must run before WeasyPrint is imported: it `dlopen()`s its system
+# libraries at import time and needs DYLD_FALLBACK_LIBRARY_PATH set to
+# find them on macOS.
+configure_library_path()
+
+from weasyprint import HTML, CSS
 
 logger = get_logger(__name__)
 console = Console()

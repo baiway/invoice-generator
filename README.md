@@ -47,13 +47,7 @@ WeasyPrint requires several system libraries (Cairo, Pango, etc.) that are not b
 brew install weasyprint
 ```
 
-Then expose those libraries to Python by adding the following to your shell profile (`~/.zshrc` or `~/.bashrc`) and restarting your shell:
-
-```shell
-export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_FALLBACK_LIBRARY_PATH
-```
-
-Alternatively, if you don't want to modify your shell profile, the repo includes a `.env` file with the same value and you can pass it to uv: `uv run --env-file .env generate-invoices.py ...`.
+No further setup is needed: `src/weasyprint_libs.py` adds the Homebrew lib directory to `DYLD_FALLBACK_LIBRARY_PATH` in-process before WeasyPrint is imported, so there is nothing to export in your shell profile.
 
 **4. Install dependencies:**
 ```shell
@@ -165,7 +159,7 @@ Invoices are saved as PDFs in the `invoices/` directory:
 
 ### Running Tests
 
-The project has a comprehensive test suite with **144 tests** achieving **99% code coverage**.
+The project has a comprehensive test suite with **171 tests** achieving **99% code coverage**.
 
 ```shell
 # Run all tests
@@ -212,7 +206,8 @@ invoice-generator/
 │   ├── constants.py          # Configuration constants
 │   ├── logging_config.py     # Logging setup (file + console handlers)
 │   ├── utils.py              # Date utilities
-│   └── formatting.py         # Display formatting (dates, times, currency)
+│   ├── formatting.py         # Display formatting (dates, times, currency)
+│   └── weasyprint_libs.py    # macOS library path setup for WeasyPrint
 ├── tests/                    # Test suite
 │   ├── conftest.py           # Pytest fixtures and test data
 │   ├── test_calendar_api.py  # Google Calendar API tests (mocked)
@@ -222,7 +217,8 @@ invoice-generator/
 │   ├── test_invoice_generator.py # PDF generation tests
 │   ├── test_logging_config.py    # Logging configuration tests
 │   ├── test_models.py        # Pydantic model validation tests
-│   └── test_utils.py         # Date utility tests
+│   ├── test_utils.py         # Date utility tests
+│   └── test_weasyprint_libs.py  # Library path configuration tests
 ├── data/                     # Configuration files (git-ignored)
 │   ├── students.json
 │   ├── bank_details.json
@@ -239,7 +235,17 @@ invoice-generator/
 
 ### WeasyPrint installation issues (macOS)
 
-WeasyPrint requires system libraries that must be installed separately via Homebrew, and Python needs `DYLD_FALLBACK_LIBRARY_PATH` set so it can find them at runtime — see step 3 of the uv installation section above.
+If you see `cannot load library 'libgobject-2.0-0'`, the Homebrew libraries are missing or are installed somewhere `src/weasyprint_libs.py` does not look (it checks `/opt/homebrew/lib` and `/usr/local/lib`). Run `brew install weasyprint`, then check where it put them:
+
+```shell
+ls "$(brew --prefix)/lib/libgobject-2.0.dylib"
+```
+
+If that path is outside both directories, point Python at it yourself before running the generator:
+
+```shell
+export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib:$DYLD_FALLBACK_LIBRARY_PATH"
+```
 
 If you still see library errors, refer to the official WeasyPrint docs:
 - [Installation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation)
