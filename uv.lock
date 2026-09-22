@@ -645,28 +645,14 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
-    { name = "email-validator" },
-    { name = "google-api-core" },
     { name = "google-api-python-client" },
     { name = "google-auth" },
-    { name = "google-auth-httplib2" },
     { name = "google-auth-oauthlib" },
     { name = "jinja2" },
     { name = "pandas" },
-    { name = "pydantic" },
-    { name = "python-dateutil" },
+    { name = "pydantic", extra = ["email"] },
     { name = "rich" },
-    { name = "rich-argparse" },
     { name = "weasyprint" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pandas-stubs" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "types-beautifulsoup4" },
 ]
 
 [package.dev-dependencies]
@@ -680,27 +666,16 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "beautifulsoup4", specifier = "==4.12.3" },
-    { name = "email-validator", specifier = ">=2.0.0" },
-    { name = "google-api-core", specifier = "==2.19.2" },
-    { name = "google-api-python-client", specifier = "==2.144.0" },
-    { name = "google-auth", specifier = "==2.34.0" },
-    { name = "google-auth-httplib2", specifier = "==0.2.0" },
-    { name = "google-auth-oauthlib", specifier = "==1.2.1" },
-    { name = "jinja2", specifier = "==3.1.4" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
-    { name = "pandas", specifier = "==2.2.2" },
-    { name = "pandas-stubs", marker = "extra == 'dev'", specifier = ">=2.1.0" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
-    { name = "python-dateutil", specifier = "==2.9.0.post0" },
-    { name = "rich", specifier = "==13.9.4" },
-    { name = "rich-argparse", specifier = "==1.6.0" },
-    { name = "types-beautifulsoup4", marker = "extra == 'dev'" },
+    { name = "beautifulsoup4", specifier = ">=4.12.3" },
+    { name = "google-api-python-client", specifier = ">=2.144.0" },
+    { name = "google-auth", specifier = ">=2.34.0" },
+    { name = "google-auth-oauthlib", specifier = ">=1.2.1" },
+    { name = "jinja2", specifier = ">=3.1.4" },
+    { name = "pandas", specifier = ">=2.2.2" },
+    { name = "pydantic", extras = ["email"], specifier = ">=2.0" },
+    { name = "rich", specifier = ">=13.9.4" },
     { name = "weasyprint", specifier = ">=63.0" },
 ]
-provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1363,6 +1338,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/87/b70ad306ebb6f9b585f114d0ac2137d792b48be34d732d60e597c2f8465a/pydantic-2.12.5-py3-none-any.whl", hash = "sha256:e561593fccf61e8a20fc46dfc2dfe075b8be7d0188df33f221ad1f0139180f9d", size = 463580, upload-time = "2025-11-26T15:11:44.605Z" },
 ]
 
+[package.optional-dependencies]
+email = [
+    { name = "email-validator" },
+]
+
 [[package]]
 name = "pydantic-core"
 version = "2.41.5"
@@ -1610,18 +1590,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ab/3a/0316b28d0761c6734d6bc14e770d85506c986c85ffb239e688eeaab2c2bc/rich-13.9.4.tar.gz", hash = "sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098", size = 223149, upload-time = "2024-11-01T16:43:57.873Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/19/71/39c7c0d87f8d4e6c020a393182060eaefeeae6c01dab6a84ec346f2567df/rich-13.9.4-py3-none-any.whl", hash = "sha256:6049d5e6ec054bf2779ab3358186963bac2ea89175919d699e378b99738c2a90", size = 242424, upload-time = "2024-11-01T16:43:55.817Z" },
-]
-
-[[package]]
-name = "rich-argparse"
-version = "1.6.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "rich" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/ee/c410251ff6123d4417f2fe8e72c8628f187682b70ce34134a2a3e307a2d5/rich_argparse-1.6.0.tar.gz", hash = "sha256:092083c30da186f25bcdff8b1d47fdfb571288510fb051e0488a72cc3128de13", size = 17499, upload-time = "2024-11-02T10:36:20.126Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/25/45/54b95bb72bb17c27a7252bee5034955020b5869a33918b660ffc29cbf608/rich_argparse-1.6.0-py3-none-any.whl", hash = "sha256:fbe70a1d821b3f2fa8958cddf0cae131870a6e9faa04ab52b409cb1eda809bd7", size = 20072, upload-time = "2024-11-02T10:36:18.305Z" },
 ]
 
 [[package]]

@@ -63,8 +63,12 @@ If you prefer pip:
 ```shell
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e . --group dev
 ```
+
+The `--group` flag needs pip 25.1 or newer; development dependencies are
+declared in `[dependency-groups]` (PEP 735) rather than as an extra. For
+runtime dependencies only, `pip install -e .` is enough.
 
 ### Setup
 **1. Configure student data:** Create a directory called `data` in the root directory of the project
@@ -175,7 +179,7 @@ The project has a comprehensive test suite with **194 tests** achieving **99% co
 
 The tests import the installed `invoice_generator` package rather than the
 source directory, so the project itself must be installed first — `uv sync`
-and `pip install -e ".[dev]"` both do this.
+and `pip install -e . --group dev` both do this.
 
 ```shell
 # Run all tests

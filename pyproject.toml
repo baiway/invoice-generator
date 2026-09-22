@@ -4,34 +4,22 @@ version = "0.1.0"
 description = "Generate PDF invoices from Google Calendar events"
 readme = "README.md"
 requires-python = ">=3.10"
+# Direct dependencies only, as compatibility floors: `uv.lock` pins the
+# exact versions, and `uv lock --upgrade` is how they move.
 dependencies = [
-    "beautifulsoup4==4.12.3",
-    "email-validator>=2.0.0",
-    "google-api-core==2.19.2",
-    "google-api-python-client==2.144.0",
-    "google-auth==2.34.0",
-    "google-auth-httplib2==0.2.0",
-    "google-auth-oauthlib==1.2.1",
-    "jinja2==3.1.4",
-    "pandas==2.2.2",
-    "pydantic>=2.0",
-    "python-dateutil==2.9.0.post0",
-    "rich==13.9.4",
-    "rich-argparse==1.6.0",
+    "beautifulsoup4>=4.12.3",
+    "google-api-python-client>=2.144.0",
+    "google-auth>=2.34.0",
+    "google-auth-oauthlib>=1.2.1",
+    "jinja2>=3.1.4",
+    "pandas>=2.2.2",
+    "pydantic[email]>=2.0",
+    "rich>=13.9.4",
     "weasyprint>=63.0",
 ]
 
 [project.scripts]
 generate-invoices = "invoice_generator.cli:main"
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
-    "mypy>=1.8.0",
-    "pandas-stubs>=2.1.0",
-    "types-beautifulsoup4",
-]
 
 [dependency-groups]
 dev = [
