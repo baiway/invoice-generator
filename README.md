@@ -128,9 +128,28 @@ mv ~/Downloads/credentials.json ./data
 
 ## Usage
 
-Installing the project (`uv sync`, or `pip install -e .`) puts a
-`generate-invoices` command on your PATH. Running `python generate-invoices.py`
-from the repository root does the same thing.
+Installing the project puts a `generate-invoices` command inside the project's
+virtual environment — not on your PATH. There are two ways to reach it.
+
+Run it through uv, which needs no activation and works from anywhere in the
+repository:
+
+```shell
+uv run generate-invoices
+```
+
+Or activate the environment once per shell, after which the bare command works:
+
+```shell
+source .venv/bin/activate       # Windows: .venv\Scripts\activate
+generate-invoices
+```
+
+The examples below assume an activated environment; prefix them with `uv run`
+otherwise. Running `python generate-invoices.py` from the repository root is
+equivalent to `generate-invoices`, and needs the same environment — it imports
+the installed package, so it fails with `ModuleNotFoundError` from a shell where
+the environment is neither activated nor supplied by `uv run`.
 
 ### Basic Usage
 
@@ -180,6 +199,10 @@ The project has a comprehensive test suite with **195 tests** achieving **100% c
 The tests import the installed `invoice_generator` package rather than the
 source directory, so the project itself must be installed first — `uv sync`
 and `pip install -e . --group dev` both do this.
+
+As with `generate-invoices`, the development tools below live in the project's
+virtual environment: activate it first, or prefix each command with `uv run`
+(`uv run pytest`, `uv run mypy src/ generate-invoices.py`, `uv run ruff check`).
 
 Coverage is not collected by default; pass `--cov` when you want it.
 
@@ -234,7 +257,9 @@ newest supported Python versions.
 ```
 invoice-generator/
 ├── pyproject.toml            # Project configuration with uv support
+├── uv.lock                   # Exact versions of every dependency
 ├── generate-invoices.py      # Wrapper for the installed CLI
+├── .github/workflows/ci.yml  # Lint, type check and tests on 3.11 and 3.14
 ├── src/
 │   └── invoice_generator/    # The package itself
 │       ├── cli.py                # Command line interface and entry point
@@ -248,6 +273,7 @@ invoice-generator/
 │       ├── utils.py              # Date utilities
 │       ├── formatting.py         # Display formatting (dates, times, currency)
 │       ├── weasyprint_libs.py    # macOS library path setup for WeasyPrint
+│       ├── py.typed              # PEP 561 marker: the package ships types
 │       └── templates/            # Invoice template, shipped with the package
 │           ├── invoice-template.html
 │           └── styles.css
