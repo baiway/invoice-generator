@@ -69,9 +69,11 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "-v",
-    "--cov=invoice_generator",
-    "--cov-report=term-missing",
-    "--cov-report=html",
+    # Import test modules by path rather than by package, so `tests/` needs
+    # no `__init__.py` and the repository root is never put on `sys.path` —
+    # the tests exercise the installed package, which is the point of a
+    # src-layout
+    "--import-mode=importlib",
 ]
 filterwarnings = [
     # httplib2 (a google-api-python-client dependency) still calls
@@ -79,6 +81,9 @@ filterwarnings = [
     # fix here, and there is no fixed httplib2 release yet.
     "ignore::DeprecationWarning:httplib2.auth",
 ]
+
+[tool.coverage.run]
+source = ["invoice_generator"]
 
 [build-system]
 requires = ["hatchling"]

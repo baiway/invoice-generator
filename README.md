@@ -181,6 +181,8 @@ The tests import the installed `invoice_generator` package rather than the
 source directory, so the project itself must be installed first — `uv sync`
 and `pip install -e . --group dev` both do this.
 
+Coverage is not collected by default; pass `--cov` when you want it.
+
 ```shell
 # Run all tests
 pytest
@@ -189,10 +191,10 @@ pytest
 pytest -v
 
 # With coverage report (terminal)
-pytest --cov=invoice_generator --cov-report=term-missing
+pytest --cov --cov-report=term-missing
 
 # With coverage report (HTML)
-pytest --cov=invoice_generator --cov-report=html
+pytest --cov --cov-report=html
 # Then open htmlcov/index.html in your browser
 
 # Run specific test file
