@@ -124,29 +124,33 @@ mv ~/Downloads/credentials.json ./data
 
 ## Usage
 
+Installing the project (`uv sync`, or `pip install -e .`) puts a
+`generate-invoices` command on your PATH. Running `python generate-invoices.py`
+from the repository root does the same thing.
+
 ### Basic Usage
 
 Generate invoices for the last full month:
 ```shell
-python generate-invoices.py
+generate-invoices
 ```
 
 ### Advanced Options
 
 ```shell
 # Generate for specific students only
-python generate-invoices.py --only "Alice" "Bob"
+generate-invoices --only "Alice" "Bob"
 
 # Custom date range
-python generate-invoices.py --from 2024-01-01 --to 2024-01-31
+generate-invoices --from 2024-01-01 --to 2024-01-31
 
 # Custom start date (end defaults to today)
-python generate-invoices.py --from 2024-01-01
+generate-invoices --from 2024-01-01
 ```
 
 For all options:
 ```shell
-python generate-invoices.py --help
+generate-invoices --help
 ```
 
 ### Output
@@ -159,7 +163,7 @@ Invoices are saved as PDFs in the `invoices/` directory:
 
 ### Running Tests
 
-The project has a comprehensive test suite with **171 tests** achieving **99% code coverage**.
+The project has a comprehensive test suite with **189 tests** achieving **99% code coverage**.
 
 The tests import the installed `invoice_generator` package rather than the
 source directory, so the project itself must be installed first — `uv sync`
@@ -200,9 +204,10 @@ mypy src/ generate-invoices.py
 ```
 invoice-generator/
 ├── pyproject.toml            # Project configuration with uv support
-├── generate-invoices.py      # Main entry point
+├── generate-invoices.py      # Wrapper for the installed CLI
 ├── src/
 │   └── invoice_generator/    # The package itself
+│       ├── cli.py                # Command line interface and entry point
 │       ├── calendar_api.py       # Google Calendar API integration
 │       ├── event_processing.py   # Event classification and processing
 │       ├── invoice_generator.py  # PDF generation with WeasyPrint
@@ -216,6 +221,7 @@ invoice-generator/
 ├── tests/                    # Test suite
 │   ├── conftest.py           # Pytest fixtures and test data
 │   ├── test_calendar_api.py  # Google Calendar API tests (mocked)
+│   ├── test_cli.py           # CLI parsing and validation tests
 │   ├── test_data_loader.py   # JSON loading and validation tests
 │   ├── test_event_processing.py  # Event classification tests
 │   ├── test_formatting.py    # Formatting function tests

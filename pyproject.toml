@@ -21,6 +21,9 @@ dependencies = [
     "weasyprint>=63.0",
 ]
 
+[project.scripts]
+generate-invoices = "invoice_generator.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
