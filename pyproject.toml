@@ -70,6 +70,12 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
 ]
+filterwarnings = [
+    # httplib2 (a google-api-python-client dependency) still calls
+    # pyparsing's deprecated camelCase API at import time. Nothing we can
+    # fix here, and there is no fixed httplib2 release yet.
+    "ignore::DeprecationWarning:httplib2.auth",
+]
 
 [build-system]
 requires = ["hatchling"]
