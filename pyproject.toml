@@ -28,7 +28,18 @@ dev = [
     "mypy>=1.8.0",
     "pandas-stubs>=2.1.0",
     "types-beautifulsoup4",
+    "ruff>=0.16.8",
 ]
+
+[tool.ruff.lint]
+# Linting only, deliberately no formatter: line length (E5) and import
+# order (I) are left to the author. `target-version` is inferred from
+# `requires-python`.
+#   E4/E7/E9 + F  pyflakes and the pycodestyle errors worth enforcing
+#   B             bugbear: likely mistakes rather than style
+#   UP            syntax now that the floor is 3.10
+#   SIM           simplifications that remove code
+select = ["E4", "E7", "E9", "F", "B", "UP", "SIM"]
 
 [tool.mypy]
 python_version = "3.10"

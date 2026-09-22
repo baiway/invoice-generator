@@ -7,7 +7,6 @@ for missing files, malformed JSON, and validation errors.
 
 import json
 import pytest
-from pathlib import Path
 from pydantic import ValidationError
 
 from invoice_generator.data_loader import (
@@ -96,13 +95,12 @@ class TestLoadJsonWithModel:
         test_file = tmp_path / "invalid.json"
         test_file.write_text(json.dumps(invalid_data))
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(ValidationError):
-                load_json_with_model(
-                    BankDetails,
-                    str(test_file),
-                    "invalid bank details"
-                )
+        with caplog.at_level(logging.ERROR), pytest.raises(ValidationError):
+            load_json_with_model(
+                BankDetails,
+                str(test_file),
+                "invalid bank details"
+            )
 
         # Verify error was logged
         assert "Validation failed" in caplog.text

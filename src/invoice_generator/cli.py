@@ -130,10 +130,10 @@ def validate_students(
     if students_file is None:
         students_file = Path(DATA_DIR) / STUDENTS_FILENAME
 
-    with open(students_file, "r") as f:
+    with open(students_file) as f:
         student_data = json.load(f)
 
-    student_keys = {name for name in student_data.keys()}
+    student_keys = set(student_data)
     unrecognised_names = set(student_list) - student_keys
 
     if unrecognised_names:
@@ -166,7 +166,9 @@ def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
         end_date = datetime.strptime(end, "%Y-%m-%d")
         end_date = end_date.replace(hour=23, minute=59, second=59)
     except ValueError:
-        raise ValueError("Invalid date format. Must be in YYYY-MM-DD format.")
+        raise ValueError(
+            "Invalid date format. Must be in YYYY-MM-DD format."
+        ) from None
 
     if start_date > end_date:
         raise ValueError("`--from` date cannot be later than the `--to` date.")

@@ -205,11 +205,27 @@ pytest tests/test_models.py::TestStudentInfo
 pytest tests/test_models.py::TestStudentInfo::test_valid_student_info
 ```
 
+### Linting
+
+```shell
+ruff check
+```
+
+Ruff is configured for linting only — there is no formatter and no
+import-order rule, so it reports likely mistakes rather than style
+preferences. See `[tool.ruff.lint]` in `pyproject.toml` for the rule set.
+
 ### Type Checking
 
 ```shell
 mypy src/ generate-invoices.py
 ```
+
+### Continuous Integration
+
+`.github/workflows/ci.yml` runs the lint, type check and test suite on
+every push to `main` and every pull request, against the oldest and
+newest supported Python versions.
 
 ### Project Structure
 

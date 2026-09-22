@@ -7,8 +7,7 @@ with Pydantic validation and comprehensive error handling.
 
 import json
 import logging
-from pathlib import Path
-from typing import TypeVar, Type
+from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -25,7 +24,7 @@ T = TypeVar("T", bound=BaseModel)
 
 
 def load_json_with_model(
-    model: Type[T],
+    model: type[T],
     file_path: str,
     description: str = "data"
 ) -> T:
@@ -48,7 +47,7 @@ def load_json_with_model(
     try:
         with open(file_path) as f:
             data = json.load(f)
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         logger.error(f"{description} file not found at '{file_path}'. "
             f"Please create this file according to README.md instructions.")
         raise
@@ -68,7 +67,11 @@ def load_json_with_model(
         for error in e.errors():
             location = " -> ".join(str(loc) for loc in error['loc'])
             errors.append(f"  - {location}: {error['msg']}")
-        error_msg = f"`{file_path}` has invalid format:\n" + "\n".join(errors)
+        # Log the per-field detail: `from_exception_data` cannot carry a
+        # message, so this is the only place the user sees which field failed
+        logger.error(
+            f"`{file_path}` has invalid format:\n" + "\n".join(errors)
+        )
         raise ValidationError.from_exception_data(
             title=f"Invalid {description}",
             line_errors=[],

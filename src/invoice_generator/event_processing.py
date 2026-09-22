@@ -125,9 +125,7 @@ def is_billable(event: dict[str, Any]) -> bool:
     if event.get("status") == "cancelled":
         return False
     summary = (event.get("summary") or "").lower()
-    if summary.startswith(("canceled:", "cancelled:")):
-        return False
-    return True
+    return not summary.startswith(("canceled:", "cancelled:"))
 
 
 def match_attendee_email(
@@ -214,7 +212,6 @@ def process_events(
         - In-person events: "Tutoring StudentName"
         - Events not matching any pattern are logged and skipped
     """
-    my_email = contact_details.email  # Note: extracted but not currently used
     lessons: list[list[Any]] = []
 
     # Process events

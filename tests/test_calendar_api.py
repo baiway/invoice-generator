@@ -7,8 +7,7 @@ responses to avoid external dependencies.
 
 import pytest
 from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from invoice_generator.calendar_api import authenticate, fetch_events
 
@@ -96,7 +95,7 @@ class TestAuthenticate:
         mock_service = MagicMock()
 
         with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("invoice_generator.calendar_api.Request") as mock_request, \
+             patch("invoice_generator.calendar_api.Request"), \
              patch("invoice_generator.calendar_api.build") as mock_build:
             mock_from_file.return_value = mock_creds
             mock_build.return_value = mock_service
@@ -246,7 +245,6 @@ class TestFetchEvents:
         mock_service = MagicMock()
         mock_events = MagicMock()
         mock_list = MagicMock()
-        mock_execute = MagicMock()
 
         # Set up mock chain: service.events().list().execute()
         mock_service.events.return_value = mock_events

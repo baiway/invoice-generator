@@ -6,11 +6,9 @@ calculations, and formatting. PDFs are actually generated to verify
 the full rendering pipeline works correctly.
 """
 
-import pytest
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timezone
-import calendar
 
 from invoice_generator.invoice_generator import (
     get_invoice_period,

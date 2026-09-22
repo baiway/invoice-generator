@@ -6,14 +6,12 @@ rendering them as PDFs using WeasyPrint.
 """
 
 import pandas as pd
-import sys
 import calendar
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
 from jinja2 import Environment, PackageLoader, select_autoescape
 from bs4 import BeautifulSoup
-from typing import Any
 from rich.progress import track
 from rich.console import Console
 
@@ -39,7 +37,7 @@ from invoice_generator.weasyprint_libs import configure_library_path
 # find them on macOS.
 configure_library_path()
 
-from weasyprint import HTML, CSS
+from weasyprint import HTML, CSS  # noqa: E402 (see above)
 
 logger = get_logger(__name__)
 console = Console()
@@ -148,7 +146,7 @@ def write_invoices(
         rendered_html = template.render(
             student=student,
             invoice_period=invoice_period,
-            timings=zip(start_times, end_times, session_lengths),
+            timings=zip(start_times, end_times, session_lengths, strict=True),
             total_hours=total_hours,
             rate=rate,
             total_charge=total_charge,

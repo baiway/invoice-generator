@@ -126,8 +126,6 @@ class TestSetupLogging:
         log_file = tmp_path / "test.log"
         monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
-        root_logger = logging.getLogger()
-
         setup_logging()
 
         # Check that third-party loggers are suppressed

@@ -568,7 +568,7 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.INFO):
-            df = process_events(
+            process_events(
                 events,
                 sample_students_data,
                 [],
