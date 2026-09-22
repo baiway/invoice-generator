@@ -77,7 +77,7 @@ def fetch_events(
     logger.info(f"Fetching events from {start_date.strftime('%d %B %Y')} to "
                 f"{end_date.strftime('%d %B %Y')}")
     events_result = (
-        service.events()  # type: ignore[attr-defined]
+        service.events()
         .list(
             calendarId="primary",
             timeMin=start_date.isoformat() + "Z",
@@ -88,4 +88,5 @@ def fetch_events(
         )
         .execute()
     )
-    return events_result.get("items", [])
+    events: list[dict[str, Any]] = events_result.get("items", [])
+    return events

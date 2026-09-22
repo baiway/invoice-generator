@@ -108,7 +108,7 @@ def write_invoices(
 
     # Container to produce separate invoices for each agency; keys will be
     # the agency names
-    agency_html = {}
+    agency_html: dict[str, list[str]] = {}
 
     grouped_lessons = lessons.groupby("student")
 

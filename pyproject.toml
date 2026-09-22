@@ -3,7 +3,7 @@ name = "invoice-generator"
 version = "0.1.0"
 description = "Generate PDF invoices from Google Calendar events"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "beautifulsoup4==4.12.3",
     "email-validator>=2.0.0",
@@ -40,7 +40,7 @@ dev = [
 ]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -54,6 +54,7 @@ warn_no_return = true
 [[tool.mypy.overrides]]
 module = [
     "google.*",
+    "google_auth_oauthlib.*",
     "googleapiclient.*",
     "weasyprint.*",
 ]
