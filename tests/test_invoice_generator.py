@@ -8,7 +8,7 @@ the full rendering pipeline works correctly.
 
 import pandas as pd
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from invoice_generator.invoice_generator import (
     get_invoice_period,
@@ -123,8 +123,8 @@ class TestWriteInvoices:
 
         monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         write_invoices(
             sample_lessons_dataframe,
@@ -148,14 +148,14 @@ class TestWriteInvoices:
         # Create lessons DataFrame with private client
         lessons = pd.DataFrame({
             "student": ["Alice Smith"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc)],
-            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc)],
+            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
+            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=UTC)],
             "rate": [50.0],
             "client_type": ["private"]
         })
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         write_invoices(
             lessons,
@@ -179,14 +179,14 @@ class TestWriteInvoices:
 
         lessons = pd.DataFrame({
             "student": ["Alice Mary Smith"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc)],
-            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc)],
+            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
+            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=UTC)],
             "rate": [50.0],
             "client_type": ["private"]
         })
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         write_invoices(
             lessons,
@@ -210,14 +210,14 @@ class TestWriteInvoices:
 
         lessons = pd.DataFrame({
             "student": ["Bob Jones"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc)],
-            "end": [datetime(2024, 1, 15, 11, 30, tzinfo=timezone.utc)],
+            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
+            "end": [datetime(2024, 1, 15, 11, 30, tzinfo=UTC)],
             "rate": [40.0],
             "client_type": ["tutors4u"]
         })
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         write_invoices(
             lessons,
@@ -243,21 +243,21 @@ class TestWriteInvoices:
         lessons = pd.DataFrame({
             "student": ["Student A", "Student A", "Student B"],
             "start": [
-                datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
-                datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
-                datetime(2024, 1, 17, 10, 0, tzinfo=timezone.utc)
+                datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                datetime(2024, 1, 17, 10, 0, tzinfo=UTC)
             ],
             "end": [
-                datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
-                datetime(2024, 1, 16, 11, 0, tzinfo=timezone.utc),
-                datetime(2024, 1, 17, 11, 0, tzinfo=timezone.utc)
+                datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                datetime(2024, 1, 16, 11, 0, tzinfo=UTC),
+                datetime(2024, 1, 17, 11, 0, tzinfo=UTC)
             ],
             "rate": [40.0, 40.0, 40.0],
             "client_type": ["tutors4u", "tutors4u", "tutors4u"]
         })
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         write_invoices(
             lessons,
@@ -284,19 +284,19 @@ class TestWriteInvoices:
         lessons = pd.DataFrame({
             "student": ["Test Student", "Test Student"],
             "start": [
-                datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
-                datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc)
+                datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                datetime(2024, 1, 16, 10, 0, tzinfo=UTC)
             ],
             "end": [
-                datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),  # 1 hour
-                datetime(2024, 1, 16, 11, 30, tzinfo=timezone.utc)  # 1.5 hours
+                datetime(2024, 1, 15, 11, 0, tzinfo=UTC),  # 1 hour
+                datetime(2024, 1, 16, 11, 30, tzinfo=UTC)  # 1.5 hours
             ],
             "rate": [50.0, 50.0],
             "client_type": ["private", "private"]
         })
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         rendered_html_capture = []
 
@@ -331,8 +331,8 @@ class TestWriteInvoices:
         output_dir = tmp_path / "invoices"
         monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         result = write_invoices(
             sample_lessons_dataframe,
@@ -357,14 +357,14 @@ class TestWriteInvoices:
 
         lessons = pd.DataFrame({
             "student": ["Alice Smith"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc)],
-            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc)],
+            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
+            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=UTC)],
             "rate": [50.0],
             "client_type": ["private"]
         })
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         with caplog.at_level(logging.INFO):
             write_invoices(
@@ -389,14 +389,14 @@ class TestWriteInvoices:
 
         lessons = pd.DataFrame({
             "student": ["Bob Jones"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc)],
-            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc)],
+            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
+            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=UTC)],
             "rate": [40.0],
             "client_type": ["tutors4u"]
         })
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         with caplog.at_level(logging.INFO):
             write_invoices(

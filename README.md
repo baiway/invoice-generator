@@ -3,7 +3,7 @@
 Generates PDF invoices from Google Calendar events by matching attendee email addresses with details specified in `students.json`.
 
 ## Requirements
-- Python >= 3.10
+- Python >= 3.11
 - [uv](https://github.com/astral-sh/uv) (recommended) or `pip` for dependency management
 - Google Calendar API credentials (instructions below)
 - A consistent naming scheme for your Google Calendar events (e.g. "Tutoring Joe Bloggs")

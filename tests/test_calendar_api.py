@@ -6,7 +6,7 @@ responses to avoid external dependencies.
 """
 
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from unittest.mock import MagicMock, patch
 
 from invoice_generator.calendar_api import authenticate, fetch_events
@@ -254,8 +254,8 @@ class TestFetchEvents:
             {"summary": "Event 2"}
         ]}
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         result = fetch_events(mock_service, start, end)
 
@@ -273,8 +273,8 @@ class TestFetchEvents:
         mock_events.list.return_value = mock_list
         mock_list.execute.return_value = {"items": []}
 
-        start = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 2, 20, 14, 45, 0, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
+        end = datetime(2024, 2, 20, 14, 45, 0, tzinfo=UTC)
 
         fetch_events(mock_service, start, end)
 
@@ -294,8 +294,8 @@ class TestFetchEvents:
         mock_events.list.return_value = mock_list
         mock_list.execute.return_value = {"items": []}
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         fetch_events(mock_service, start, end)
 
@@ -312,8 +312,8 @@ class TestFetchEvents:
         mock_events.list.return_value = mock_list
         mock_list.execute.return_value = {"items": []}
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         fetch_events(mock_service, start, end)
 
@@ -331,8 +331,8 @@ class TestFetchEvents:
         mock_events.list.return_value = mock_list
         mock_list.execute.return_value = {"items": []}
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         fetch_events(mock_service, start, end)
 
@@ -355,8 +355,8 @@ class TestFetchEvents:
         mock_events.list.return_value = mock_list
         mock_list.execute.return_value = {"items": expected_items}
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         result = fetch_events(mock_service, start, end)
 
@@ -373,8 +373,8 @@ class TestFetchEvents:
         # API returns empty dict or dict without 'items' key
         mock_list.execute.return_value = {}
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 31, tzinfo=UTC)
 
         result = fetch_events(mock_service, start, end)
 
@@ -392,8 +392,8 @@ class TestFetchEvents:
         mock_events.list.return_value = mock_list
         mock_list.execute.return_value = {"items": []}
 
-        start = datetime(2024, 1, 15, tzinfo=timezone.utc)
-        end = datetime(2024, 2, 20, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, tzinfo=UTC)
+        end = datetime(2024, 2, 20, tzinfo=UTC)
 
         with caplog.at_level(logging.INFO):
             fetch_events(mock_service, start, end)

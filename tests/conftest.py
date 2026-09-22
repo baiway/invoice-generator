@@ -5,6 +5,7 @@ Pytest configuration and shared fixtures.
 from typing import Any
 import pytest
 from invoice_generator.models import StudentInfo
+from datetime import UTC
 
 
 @pytest.fixture
@@ -308,19 +309,19 @@ def sample_contact_details_model():
 def sample_lessons_dataframe():
     """Sample lessons DataFrame for invoice generation."""
     import pandas as pd
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     data = {
         "student": ["Alice Smith", "Alice Smith", "Bob Jones"],
         "start": [
-            datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
-            datetime(2024, 1, 17, 14, 0, tzinfo=timezone.utc),
-            datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc)
+            datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+            datetime(2024, 1, 17, 14, 0, tzinfo=UTC),
+            datetime(2024, 1, 16, 10, 0, tzinfo=UTC)
         ],
         "end": [
-            datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
-            datetime(2024, 1, 17, 15, 30, tzinfo=timezone.utc),
-            datetime(2024, 1, 16, 11, 30, tzinfo=timezone.utc)
+            datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+            datetime(2024, 1, 17, 15, 30, tzinfo=UTC),
+            datetime(2024, 1, 16, 11, 30, tzinfo=UTC)
         ],
         "rate": [50.0, 50.0, 40.0],
         "client_type": ["private", "private", "tutors4u"]

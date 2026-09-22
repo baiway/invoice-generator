@@ -10,6 +10,7 @@ import calendar
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
+from typing import cast
 from jinja2 import Environment, PackageLoader, select_autoescape
 from bs4 import BeautifulSoup
 from rich.progress import track
@@ -132,9 +133,12 @@ def write_invoices(
         start_times = lesson_info["start"]
         end_times = lesson_info["end"]
 
-        # Calculate amount owed
+        # Calculate amount owed. pandas-stubs types `Series.sum()` as
+        # `float` whatever the dtype; for a timedelta Series it is a
+        # `Timedelta`, which the template filter and the division below
+        # both rely on
         session_lengths = end_times - start_times
-        total_hours = session_lengths.sum()
+        total_hours = cast(pd.Timedelta, session_lengths.sum())
         rate = lesson_info["rate"].iloc[0]
         client_type = lesson_info["client_type"].iloc[0]
         total_charge = (total_hours / pd.Timedelta(hours=1)) * rate

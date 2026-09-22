@@ -3,7 +3,7 @@ name = "invoice-generator"
 version = "0.1.0"
 description = "Generate PDF invoices from Google Calendar events"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 # Direct dependencies only, as compatibility floors: `uv.lock` pins the
 # exact versions, and `uv lock --upgrade` is how they move.
 dependencies = [
@@ -12,7 +12,7 @@ dependencies = [
     "google-auth>=2.34.0",
     "google-auth-oauthlib>=1.2.1",
     "jinja2>=3.1.4",
-    "pandas>=2.2.2",
+    "pandas>=3.0.6",
     "pydantic[email]>=2.0",
     "rich>=13.9.4",
     "weasyprint>=63.0",
@@ -26,7 +26,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "mypy>=1.8.0",
-    "pandas-stubs>=2.1.0",
+    "pandas-stubs>=3.0.5",
     "types-beautifulsoup4",
     "ruff>=0.16.8",
 ]
@@ -42,7 +42,7 @@ dev = [
 select = ["E4", "E7", "E9", "F", "B", "UP", "SIM"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
