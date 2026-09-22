@@ -7,6 +7,7 @@ log levels, and third-party logger suppression.
 
 import pytest
 import logging
+import sys
 from pathlib import Path
 
 from src.logging_config import setup_logging, get_logger
@@ -15,14 +16,32 @@ from src.logging_config import setup_logging, get_logger
 class TestSetupLogging:
     """Tests for setup_logging function."""
 
+    @pytest.fixture(autouse=True)
+    def clean_root_logger(self):
+        """Give each test a bare root logger and tidy up afterwards.
+
+        `setup_logging` attaches a `FileHandler` to the root logger.
+        Dropping it without closing it leaks the open log file into the
+        rest of the suite (surfacing as a `ResourceWarning` whenever the
+        garbage collector gets round to it), so close the handlers each
+        test added and put the original ones back.
+        """
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers[:]
+        original_level = root_logger.level
+        root_logger.handlers.clear()
+
+        yield
+
+        for handler in root_logger.handlers:
+            handler.close()
+        root_logger.handlers[:] = original_handlers
+        root_logger.setLevel(original_level)
+
     def test_creates_log_file_at_specified_path(self, tmp_path, monkeypatch):
         """Should create log file at the specified path."""
         log_file = tmp_path / "test.log"
         monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
-
-        # Clear any existing handlers
-        root_logger = logging.getLogger()
-        root_logger.handlers.clear()
 
         setup_logging()
 
@@ -32,9 +51,6 @@ class TestSetupLogging:
         """Should return absolute path to log file."""
         log_file = tmp_path / "test.log"
         monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
-
-        root_logger = logging.getLogger()
-        root_logger.handlers.clear()
 
         result = setup_logging()
 
@@ -47,7 +63,6 @@ class TestSetupLogging:
         monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
-        root_logger.handlers.clear()
 
         setup_logging()
 
@@ -67,14 +82,17 @@ class TestSetupLogging:
         monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
-        root_logger.handlers.clear()
 
         setup_logging()
 
-        # Find the console handler (StreamHandler)
+        # Find the console handler. pytest attaches log-capture handlers
+        # of its own, which are also StreamHandlers, so match on the
+        # stream `setup_logging` writes to.
         console_handler = None
         for handler in root_logger.handlers:
-            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            if (isinstance(handler, logging.StreamHandler)
+                    and not isinstance(handler, logging.FileHandler)
+                    and handler.stream is sys.stdout):
                 console_handler = handler
                 break
 
@@ -87,7 +105,6 @@ class TestSetupLogging:
         monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
-        root_logger.handlers.clear()
 
         setup_logging(level=logging.DEBUG)
 
@@ -110,7 +127,6 @@ class TestSetupLogging:
         monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
-        root_logger.handlers.clear()
 
         setup_logging()
 
@@ -132,7 +148,6 @@ class TestSetupLogging:
         log_file.write_text("Old log content\n")
 
         root_logger = logging.getLogger()
-        root_logger.handlers.clear()
 
         setup_logging()
 
@@ -155,7 +170,6 @@ class TestSetupLogging:
         monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
-        root_logger.handlers.clear()
 
         setup_logging()
 
