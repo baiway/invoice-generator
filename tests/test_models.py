@@ -1,5 +1,5 @@
 """
-Tests for src/models.py Pydantic model validation.
+Tests for src/invoice_generator/models.py Pydantic model validation.
 
 This module tests all Pydantic models including validators, properties,
 and error handling for invalid data.
@@ -7,7 +7,7 @@ and error handling for invalid data.
 
 import pytest
 from pydantic import ValidationError
-from src.models import StudentInfo, BankDetails, ContactDetails, StudentsData
+from invoice_generator.models import StudentInfo, BankDetails, ContactDetails, StudentsData
 
 
 class TestStudentInfo:

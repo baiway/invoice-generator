@@ -9,8 +9,8 @@ different client types.
 import pandas as pd
 from typing import Any
 
-from src.models import StudentInfo, ContactDetails
-from src.logging_config import get_logger
+from invoice_generator.models import StudentInfo, ContactDetails
+from invoice_generator.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -145,7 +145,7 @@ def match_attendee_email(
         Student name if match found, None otherwise
 
     Examples:
-        >>> from src.models import StudentInfo
+        >>> from invoice_generator.models import StudentInfo
         >>> students = {"Alice": StudentInfo(client_type="private", rate=50.0, emails=["alice@example.com"])}
         >>> match_attendee_email([{"email": "alice@example.com"}], students)
         'Alice'

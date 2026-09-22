@@ -1,5 +1,5 @@
 """
-Tests for src/invoice_generator.py PDF generation and invoice creation.
+Tests for src/invoice_generator/invoice_generator.py PDF generation and invoice creation.
 
 This module tests invoice generation logic including PDF creation,
 calculations, and formatting. PDFs are actually generated to verify
@@ -12,13 +12,13 @@ from pathlib import Path
 from datetime import datetime, timezone
 import calendar
 
-from src.invoice_generator import (
+from invoice_generator.invoice_generator import (
     get_invoice_period,
     extract_page_content,
     write_invoices,
     print_inactive_students,
 )
-from src.models import StudentInfo
+from invoice_generator.models import StudentInfo
 
 
 class TestGetInvoicePeriod:
@@ -123,7 +123,7 @@ class TestWriteInvoices:
         output_dir = tmp_path / "new_output"
         assert not output_dir.exists()
 
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         start = datetime(2024, 1, 1, tzinfo=timezone.utc)
         end = datetime(2024, 1, 31, tzinfo=timezone.utc)
@@ -145,7 +145,7 @@ class TestWriteInvoices:
     ):
         """Should generate PDF file for private client."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         # Create lessons DataFrame with private client
         lessons = pd.DataFrame({
@@ -177,7 +177,7 @@ class TestWriteInvoices:
     ):
         """Private client PDFs should use lowercase-hyphenated filenames."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Alice Mary Smith"],
@@ -208,7 +208,7 @@ class TestWriteInvoices:
     ):
         """Should generate combined PDF for agency clients."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Bob Jones"],
@@ -239,7 +239,7 @@ class TestWriteInvoices:
     ):
         """Agency PDF should combine multiple students in one file."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         # Two students from same agency
         lessons = pd.DataFrame({
@@ -281,7 +281,7 @@ class TestWriteInvoices:
     ):
         """Should correctly sum session durations (1h + 1.5h = 2.5h)."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Test Student", "Test Student"],
@@ -310,7 +310,7 @@ class TestWriteInvoices:
                     pass
             return MockHTML(string)
 
-        monkeypatch.setattr("src.invoice_generator.HTML", capture_html)
+        monkeypatch.setattr("invoice_generator.invoice_generator.HTML", capture_html)
 
         write_invoices(
             lessons,
@@ -331,7 +331,7 @@ class TestWriteInvoices:
     ):
         """Should return absolute path to output directory."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         start = datetime(2024, 1, 1, tzinfo=timezone.utc)
         end = datetime(2024, 1, 31, tzinfo=timezone.utc)
@@ -355,7 +355,7 @@ class TestWriteInvoices:
         import logging
 
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Alice Smith"],
@@ -387,7 +387,7 @@ class TestWriteInvoices:
         import logging
 
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("src.invoice_generator.OUTPUT_DIR", str(output_dir))
+        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Bob Jones"],

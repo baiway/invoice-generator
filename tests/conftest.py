@@ -4,7 +4,7 @@ Pytest configuration and shared fixtures.
 
 from typing import Any
 import pytest
-from src.models import StudentInfo
+from invoice_generator.models import StudentInfo
 
 
 @pytest.fixture
@@ -284,7 +284,7 @@ def comprehensive_students_data() -> dict[str, StudentInfo]:
 @pytest.fixture
 def sample_bank_details_model():
     """BankDetails Pydantic model instance."""
-    from src.models import BankDetails
+    from invoice_generator.models import BankDetails
     return BankDetails(
         name="Test User",
         sort_code="04-00-04",  # Will be normalized to "040004"
@@ -296,7 +296,7 @@ def sample_bank_details_model():
 @pytest.fixture
 def sample_contact_details_model():
     """ContactDetails Pydantic model instance."""
-    from src.models import ContactDetails
+    from invoice_generator.models import ContactDetails
     return ContactDetails(
         country_code="+44",
         phone_number="07123456789",  # Will be normalized to digits only

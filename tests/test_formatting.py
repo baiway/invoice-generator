@@ -1,11 +1,11 @@
 """
-Tests for src/formatting.py display formatting functions.
+Tests for src/invoice_generator/formatting.py display formatting functions.
 """
 
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from src.formatting import (
+from invoice_generator.formatting import (
     format_british_date,
     format_24h_time,
     format_hours_minutes,

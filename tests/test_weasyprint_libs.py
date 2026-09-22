@@ -1,5 +1,5 @@
 """
-Tests for src/weasyprint_libs.py library path configuration.
+Tests for src/invoice_generator/weasyprint_libs.py library path configuration.
 
 This module tests the macOS `DYLD_FALLBACK_LIBRARY_PATH` setup that lets
 WeasyPrint find its Homebrew-installed system libraries.
@@ -9,8 +9,8 @@ import os
 import sys
 import pytest
 
-from src import weasyprint_libs
-from src.weasyprint_libs import LIBRARY_MARKER, configure_library_path
+from invoice_generator import weasyprint_libs
+from invoice_generator.weasyprint_libs import LIBRARY_MARKER, configure_library_path
 
 ENV_VAR = "DYLD_FALLBACK_LIBRARY_PATH"
 

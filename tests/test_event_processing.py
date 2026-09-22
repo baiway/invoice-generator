@@ -1,9 +1,9 @@
 """
-Tests for src/event_processing.py event classification logic.
+Tests for src/invoice_generator/event_processing.py event classification logic.
 """
 
 import pytest
-from src.event_processing import (
+from invoice_generator.event_processing import (
     classify_event,
     extract_blue_education_name,
     extract_in_person_name,
@@ -182,7 +182,7 @@ class TestAttendeeMatch:
         self, sample_students_data
     ):
         """Successful email match should return student name."""
-        from src.event_processing import attendee_match
+        from invoice_generator.event_processing import attendee_match
 
         attendees = [{"email": "alice@example.com"}]
         result = attendee_match(attendees, sample_students_data)
@@ -193,7 +193,7 @@ class TestAttendeeMatch:
     ):
         """No match should log warning and return empty string."""
         import logging
-        from src.event_processing import attendee_match
+        from invoice_generator.event_processing import attendee_match
 
         attendees = [{"email": "unknown@example.com"}]
 
@@ -212,7 +212,7 @@ class TestProcessEvents:
         self, sample_students_data, sample_contact_details_model
     ):
         """Email-based events should be matched via attendee email."""
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -241,7 +241,7 @@ class TestProcessEvents:
         self, comprehensive_students_data, sample_contact_details_model
     ):
         """Blue Education events should extract name from title."""
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -267,7 +267,7 @@ class TestProcessEvents:
         self, sample_students_data, sample_contact_details_model
     ):
         """In-person events should extract name from title."""
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -293,7 +293,7 @@ class TestProcessEvents:
     ):
         """PMT events should be skipped with debug log."""
         import logging
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -320,7 +320,7 @@ class TestProcessEvents:
     ):
         """Unknown format events should be skipped with warning log."""
         import logging
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -348,7 +348,7 @@ class TestProcessEvents:
     ):
         """Events with no title should be skipped with debug log."""
         import logging
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -375,7 +375,7 @@ class TestProcessEvents:
     ):
         """Events where student name can't be extracted should be skipped."""
         import logging
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         # Email-based event but attendee not in student_data
         events = [
@@ -405,7 +405,7 @@ class TestProcessEvents:
         self, sample_students_data, sample_contact_details_model
     ):
         """Should only process events for specified students."""
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -438,7 +438,7 @@ class TestProcessEvents:
     ):
         """Student not found in student_data should log error."""
         import logging
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -465,7 +465,7 @@ class TestProcessEvents:
     ):
         """DataFrame start/end columns should be converted to UTC datetime."""
         import pandas as pd
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -492,7 +492,7 @@ class TestProcessEvents:
         self, sample_students_data, sample_contact_details_model
     ):
         """Empty events list should return empty DataFrame with correct columns."""
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         df = process_events(
             [],
@@ -508,7 +508,7 @@ class TestProcessEvents:
         self, sample_students_data, sample_contact_details_model
     ):
         """Cancelled events should be filtered out before invoice generation."""
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -550,7 +550,7 @@ class TestProcessEvents:
     ):
         """Should log summary of processed lessons."""
         import logging
-        from src.event_processing import process_events
+        from invoice_generator.event_processing import process_events
 
         events = [
             {

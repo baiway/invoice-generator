@@ -47,7 +47,7 @@ WeasyPrint requires several system libraries (Cairo, Pango, etc.) that are not b
 brew install weasyprint
 ```
 
-No further setup is needed: `src/weasyprint_libs.py` adds the Homebrew lib directory to `DYLD_FALLBACK_LIBRARY_PATH` in-process before WeasyPrint is imported, so there is nothing to export in your shell profile.
+No further setup is needed: `src/invoice_generator/weasyprint_libs.py` adds the Homebrew lib directory to `DYLD_FALLBACK_LIBRARY_PATH` in-process before WeasyPrint is imported, so there is nothing to export in your shell profile.
 
 **4. Install dependencies:**
 ```shell
@@ -161,6 +161,10 @@ Invoices are saved as PDFs in the `invoices/` directory:
 
 The project has a comprehensive test suite with **171 tests** achieving **99% code coverage**.
 
+The tests import the installed `invoice_generator` package rather than the
+source directory, so the project itself must be installed first — `uv sync`
+and `pip install -e ".[dev]"` both do this.
+
 ```shell
 # Run all tests
 pytest
@@ -169,10 +173,10 @@ pytest
 pytest -v
 
 # With coverage report (terminal)
-pytest --cov=src --cov-report=term-missing
+pytest --cov=invoice_generator --cov-report=term-missing
 
 # With coverage report (HTML)
-pytest --cov=src --cov-report=html
+pytest --cov=invoice_generator --cov-report=html
 # Then open htmlcov/index.html in your browser
 
 # Run specific test file
@@ -198,16 +202,17 @@ invoice-generator/
 ├── pyproject.toml            # Project configuration with uv support
 ├── generate-invoices.py      # Main entry point
 ├── src/
-│   ├── calendar_api.py       # Google Calendar API integration
-│   ├── event_processing.py   # Event classification and processing
-│   ├── invoice_generator.py  # PDF generation with WeasyPrint
-│   ├── data_loader.py        # JSON loading with Pydantic validation
-│   ├── models.py             # Pydantic models with validators and properties
-│   ├── constants.py          # Configuration constants
-│   ├── logging_config.py     # Logging setup (file + console handlers)
-│   ├── utils.py              # Date utilities
-│   ├── formatting.py         # Display formatting (dates, times, currency)
-│   └── weasyprint_libs.py    # macOS library path setup for WeasyPrint
+│   └── invoice_generator/    # The package itself
+│       ├── calendar_api.py       # Google Calendar API integration
+│       ├── event_processing.py   # Event classification and processing
+│       ├── invoice_generator.py  # PDF generation with WeasyPrint
+│       ├── data_loader.py        # JSON loading with Pydantic validation
+│       ├── models.py             # Pydantic models with validators and properties
+│       ├── constants.py          # Configuration constants
+│       ├── logging_config.py     # Logging setup (file + console handlers)
+│       ├── utils.py              # Date utilities
+│       ├── formatting.py         # Display formatting (dates, times, currency)
+│       └── weasyprint_libs.py    # macOS library path setup for WeasyPrint
 ├── tests/                    # Test suite
 │   ├── conftest.py           # Pytest fixtures and test data
 │   ├── test_calendar_api.py  # Google Calendar API tests (mocked)
@@ -235,7 +240,7 @@ invoice-generator/
 
 ### WeasyPrint installation issues (macOS)
 
-If you see `cannot load library 'libgobject-2.0-0'`, the Homebrew libraries are missing or are installed somewhere `src/weasyprint_libs.py` does not look (it checks `/opt/homebrew/lib` and `/usr/local/lib`). Run `brew install weasyprint`, then check where it put them:
+If you see `cannot load library 'libgobject-2.0-0'`, the Homebrew libraries are missing or are installed somewhere `src/invoice_generator/weasyprint_libs.py` does not look (it checks `/opt/homebrew/lib` and `/usr/local/lib`). Run `brew install weasyprint`, then check where it put them:
 
 ```shell
 ls "$(brew --prefix)/lib/libgobject-2.0.dylib"

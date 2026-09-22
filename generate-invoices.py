@@ -4,13 +4,13 @@ import sys
 from datetime import datetime
 from rich.console import Console
 
-from src.calendar_api import authenticate, fetch_events
-from src.event_processing import process_events
-from src.utils import get_last_full_month
-from src.invoice_generator import write_invoices, print_inactive_students
-from src.data_loader import load_student_data, load_bank_details, load_contact_details
-from src.logging_config import setup_logging, get_logger
-from src.constants import OUTPUT_DIR
+from invoice_generator.calendar_api import authenticate, fetch_events
+from invoice_generator.event_processing import process_events
+from invoice_generator.utils import get_last_full_month
+from invoice_generator.invoice_generator import write_invoices, print_inactive_students
+from invoice_generator.data_loader import load_student_data, load_bank_details, load_contact_details
+from invoice_generator.logging_config import setup_logging, get_logger
+from invoice_generator.constants import OUTPUT_DIR
 
 logger = get_logger(__name__)
 console = Console()

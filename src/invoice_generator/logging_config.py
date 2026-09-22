@@ -9,7 +9,7 @@ import logging
 import sys
 from pathlib import Path
 
-from src.constants import LOG_FILE
+from invoice_generator.constants import LOG_FILE
 
 
 def setup_logging(level: int = logging.INFO) -> str:

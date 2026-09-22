@@ -1,5 +1,5 @@
 """
-Tests for src/calendar_api.py Google Calendar API integration.
+Tests for src/invoice_generator/calendar_api.py Google Calendar API integration.
 
 This module tests authentication and event fetching with mocked Google API
 responses to avoid external dependencies.
@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call
 
-from src.calendar_api import authenticate, fetch_events
+from invoice_generator.calendar_api import authenticate, fetch_events
 
 
 class TestAuthenticate:
@@ -20,7 +20,7 @@ class TestAuthenticate:
         """Missing credentials.json should raise FileNotFoundError."""
         nonexistent_creds = tmp_path / "nonexistent" / "credentials.json"
         monkeypatch.setattr(
-            "src.calendar_api.CREDENTIALS_FILE",
+            "invoice_generator.calendar_api.CREDENTIALS_FILE",
             str(nonexistent_creds)
         )
 
@@ -38,11 +38,11 @@ class TestAuthenticate:
         token_file.write_text('{"token": "valid_token"}')
 
         monkeypatch.setattr(
-            "src.calendar_api.CREDENTIALS_FILE",
+            "invoice_generator.calendar_api.CREDENTIALS_FILE",
             str(creds_file)
         )
         monkeypatch.setattr(
-            "src.calendar_api.TOKEN_FILE",
+            "invoice_generator.calendar_api.TOKEN_FILE",
             str(token_file)
         )
 
@@ -54,8 +54,8 @@ class TestAuthenticate:
         # Mock build to return service
         mock_service = MagicMock()
 
-        with patch("src.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("src.calendar_api.build") as mock_build:
+        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
+             patch("invoice_generator.calendar_api.build") as mock_build:
             mock_from_file.return_value = mock_creds
             mock_build.return_value = mock_service
 
@@ -78,11 +78,11 @@ class TestAuthenticate:
         token_file.write_text('{"token": "expired_token"}')
 
         monkeypatch.setattr(
-            "src.calendar_api.CREDENTIALS_FILE",
+            "invoice_generator.calendar_api.CREDENTIALS_FILE",
             str(creds_file)
         )
         monkeypatch.setattr(
-            "src.calendar_api.TOKEN_FILE",
+            "invoice_generator.calendar_api.TOKEN_FILE",
             str(token_file)
         )
 
@@ -95,9 +95,9 @@ class TestAuthenticate:
 
         mock_service = MagicMock()
 
-        with patch("src.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("src.calendar_api.Request") as mock_request, \
-             patch("src.calendar_api.build") as mock_build:
+        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
+             patch("invoice_generator.calendar_api.Request") as mock_request, \
+             patch("invoice_generator.calendar_api.build") as mock_build:
             mock_from_file.return_value = mock_creds
             mock_build.return_value = mock_service
 
@@ -119,11 +119,11 @@ class TestAuthenticate:
         token_file.write_text('{"token": "invalid_token"}')
 
         monkeypatch.setattr(
-            "src.calendar_api.CREDENTIALS_FILE",
+            "invoice_generator.calendar_api.CREDENTIALS_FILE",
             str(creds_file)
         )
         monkeypatch.setattr(
-            "src.calendar_api.TOKEN_FILE",
+            "invoice_generator.calendar_api.TOKEN_FILE",
             str(token_file)
         )
 
@@ -142,9 +142,9 @@ class TestAuthenticate:
 
         mock_service = MagicMock()
 
-        with patch("src.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("src.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
-             patch("src.calendar_api.build") as mock_build:
+        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
+             patch("invoice_generator.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
+             patch("invoice_generator.calendar_api.build") as mock_build:
             mock_from_file.return_value = mock_creds_invalid
             mock_flow_create.return_value = mock_flow
             mock_build.return_value = mock_service
@@ -168,11 +168,11 @@ class TestAuthenticate:
         # Don't create token_file - it should not exist
 
         monkeypatch.setattr(
-            "src.calendar_api.CREDENTIALS_FILE",
+            "invoice_generator.calendar_api.CREDENTIALS_FILE",
             str(creds_file)
         )
         monkeypatch.setattr(
-            "src.calendar_api.TOKEN_FILE",
+            "invoice_generator.calendar_api.TOKEN_FILE",
             str(token_file)
         )
 
@@ -185,8 +185,8 @@ class TestAuthenticate:
 
         mock_service = MagicMock()
 
-        with patch("src.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
-             patch("src.calendar_api.build") as mock_build:
+        with patch("invoice_generator.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
+             patch("invoice_generator.calendar_api.build") as mock_build:
             mock_flow_create.return_value = mock_flow
             mock_build.return_value = mock_service
 
@@ -210,11 +210,11 @@ class TestAuthenticate:
         token_file.write_text('{"token": "valid_token"}')
 
         monkeypatch.setattr(
-            "src.calendar_api.CREDENTIALS_FILE",
+            "invoice_generator.calendar_api.CREDENTIALS_FILE",
             str(creds_file)
         )
         monkeypatch.setattr(
-            "src.calendar_api.TOKEN_FILE",
+            "invoice_generator.calendar_api.TOKEN_FILE",
             str(token_file)
         )
 
@@ -224,8 +224,8 @@ class TestAuthenticate:
 
         mock_service = MagicMock()
 
-        with patch("src.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("src.calendar_api.build") as mock_build:
+        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
+             patch("invoice_generator.calendar_api.build") as mock_build:
             mock_from_file.return_value = mock_creds
             mock_build.return_value = mock_service
 

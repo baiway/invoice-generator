@@ -12,12 +12,12 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build, Resource
 from datetime import datetime
 
-from src.constants import (
+from invoice_generator.constants import (
     CREDENTIALS_FILE,
     TOKEN_FILE,
     GOOGLE_CALENDAR_SCOPES,
 )
-from src.logging_config import get_logger
+from invoice_generator.logging_config import get_logger
 
 logger = get_logger(__name__)
 

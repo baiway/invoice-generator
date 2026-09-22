@@ -1,5 +1,5 @@
 """
-Tests for src/logging_config.py logging configuration.
+Tests for src/invoice_generator/logging_config.py logging configuration.
 
 This module tests logging setup including file handlers, console handlers,
 log levels, and third-party logger suppression.
@@ -10,7 +10,7 @@ import logging
 import sys
 from pathlib import Path
 
-from src.logging_config import setup_logging, get_logger
+from invoice_generator.logging_config import setup_logging, get_logger
 
 
 class TestSetupLogging:
@@ -41,7 +41,7 @@ class TestSetupLogging:
     def test_creates_log_file_at_specified_path(self, tmp_path, monkeypatch):
         """Should create log file at the specified path."""
         log_file = tmp_path / "test.log"
-        monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         setup_logging()
 
@@ -50,7 +50,7 @@ class TestSetupLogging:
     def test_returns_absolute_path_to_log_file(self, tmp_path, monkeypatch):
         """Should return absolute path to log file."""
         log_file = tmp_path / "test.log"
-        monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         result = setup_logging()
 
@@ -60,7 +60,7 @@ class TestSetupLogging:
     def test_file_handler_uses_info_level_by_default(self, tmp_path, monkeypatch):
         """File handler should use INFO level by default."""
         log_file = tmp_path / "test.log"
-        monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 
@@ -79,7 +79,7 @@ class TestSetupLogging:
     def test_console_handler_uses_warning_level(self, tmp_path, monkeypatch):
         """Console handler should use WARNING level."""
         log_file = tmp_path / "test.log"
-        monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 
@@ -102,7 +102,7 @@ class TestSetupLogging:
     def test_accepts_custom_logging_level(self, tmp_path, monkeypatch):
         """Should accept custom logging level."""
         log_file = tmp_path / "test.log"
-        monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 
@@ -124,7 +124,7 @@ class TestSetupLogging:
     def test_suppresses_third_party_loggers(self, tmp_path, monkeypatch):
         """Should suppress verbose third-party loggers."""
         log_file = tmp_path / "test.log"
-        monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 
@@ -142,7 +142,7 @@ class TestSetupLogging:
     def test_file_handler_mode_overwrites(self, tmp_path, monkeypatch):
         """File handler should use mode='w' to overwrite existing logs."""
         log_file = tmp_path / "test.log"
-        monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         # Create existing log file with content
         log_file.write_text("Old log content\n")
@@ -167,7 +167,7 @@ class TestSetupLogging:
     def test_log_formatters_include_timestamp_and_level(self, tmp_path, monkeypatch):
         """Log formatters should include timestamp, name, level, and message."""
         log_file = tmp_path / "test.log"
-        monkeypatch.setattr("src.logging_config.LOG_FILE", str(log_file))
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 

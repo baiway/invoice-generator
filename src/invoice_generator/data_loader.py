@@ -12,12 +12,12 @@ from typing import TypeVar, Type
 
 from pydantic import BaseModel, ValidationError
 
-from src.constants import (
+from invoice_generator.constants import (
     STUDENTS_FILE,
     BANK_DETAILS_FILE,
     CONTACT_DETAILS_FILE,
 )
-from src.models import StudentInfo, BankDetails, ContactDetails, StudentsData
+from invoice_generator.models import StudentInfo, BankDetails, ContactDetails, StudentsData
 
 logger = logging.getLogger(__name__)
 

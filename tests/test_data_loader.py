@@ -1,5 +1,5 @@
 """
-Tests for src/data_loader.py JSON loading and validation.
+Tests for src/invoice_generator/data_loader.py JSON loading and validation.
 
 This module tests all data loading functions including error handling
 for missing files, malformed JSON, and validation errors.
@@ -10,13 +10,13 @@ import pytest
 from pathlib import Path
 from pydantic import ValidationError
 
-from src.data_loader import (
+from invoice_generator.data_loader import (
     load_json_with_model,
     load_student_data,
     load_bank_details,
     load_contact_details,
 )
-from src.models import StudentInfo, BankDetails, ContactDetails, StudentsData
+from invoice_generator.models import StudentInfo, BankDetails, ContactDetails, StudentsData
 
 
 class TestLoadJsonWithModel:
@@ -130,7 +130,7 @@ class TestLoadStudentData:
         test_file.write_text(json.dumps(valid_students))
 
         # Monkeypatch the STUDENTS_FILE constant
-        monkeypatch.setattr("src.data_loader.STUDENTS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.STUDENTS_FILE", str(test_file))
 
         result = load_student_data()
 
@@ -151,7 +151,7 @@ class TestLoadStudentData:
         test_file = tmp_path / "students.json"
         test_file.write_text(json.dumps(valid_students))
 
-        monkeypatch.setattr("src.data_loader.STUDENTS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.STUDENTS_FILE", str(test_file))
 
         result = load_student_data()
 
@@ -162,7 +162,7 @@ class TestLoadStudentData:
     def test_file_not_found_handling(self, monkeypatch):
         """Missing students.json should raise FileNotFoundError."""
         monkeypatch.setattr(
-            "src.data_loader.STUDENTS_FILE",
+            "invoice_generator.data_loader.STUDENTS_FILE",
             "/nonexistent/students.json"
         )
 
@@ -181,7 +181,7 @@ class TestLoadStudentData:
         test_file = tmp_path / "students.json"
         test_file.write_text(json.dumps(invalid_students))
 
-        monkeypatch.setattr("src.data_loader.STUDENTS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.STUDENTS_FILE", str(test_file))
 
         with pytest.raises(ValidationError):
             load_student_data()
@@ -201,7 +201,7 @@ class TestLoadBankDetails:
         test_file = tmp_path / "bank_details.json"
         test_file.write_text(json.dumps(valid_bank))
 
-        monkeypatch.setattr("src.data_loader.BANK_DETAILS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.BANK_DETAILS_FILE", str(test_file))
 
         result = load_bank_details()
 
@@ -220,7 +220,7 @@ class TestLoadBankDetails:
         test_file = tmp_path / "bank_details.json"
         test_file.write_text(json.dumps(valid_bank))
 
-        monkeypatch.setattr("src.data_loader.BANK_DETAILS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.BANK_DETAILS_FILE", str(test_file))
 
         result = load_bank_details()
 
@@ -232,7 +232,7 @@ class TestLoadBankDetails:
     def test_file_not_found_handling(self, monkeypatch):
         """Missing bank_details.json should raise FileNotFoundError."""
         monkeypatch.setattr(
-            "src.data_loader.BANK_DETAILS_FILE",
+            "invoice_generator.data_loader.BANK_DETAILS_FILE",
             "/nonexistent/bank_details.json"
         )
 
@@ -250,7 +250,7 @@ class TestLoadBankDetails:
         test_file = tmp_path / "bank_details.json"
         test_file.write_text(json.dumps(invalid_bank))
 
-        monkeypatch.setattr("src.data_loader.BANK_DETAILS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.BANK_DETAILS_FILE", str(test_file))
 
         with pytest.raises(ValidationError):
             load_bank_details()
@@ -269,7 +269,7 @@ class TestLoadContactDetails:
         test_file = tmp_path / "contact_details.json"
         test_file.write_text(json.dumps(valid_contact))
 
-        monkeypatch.setattr("src.data_loader.CONTACT_DETAILS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.CONTACT_DETAILS_FILE", str(test_file))
 
         result = load_contact_details()
 
@@ -287,7 +287,7 @@ class TestLoadContactDetails:
         test_file = tmp_path / "contact_details.json"
         test_file.write_text(json.dumps(valid_contact))
 
-        monkeypatch.setattr("src.data_loader.CONTACT_DETAILS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.CONTACT_DETAILS_FILE", str(test_file))
 
         result = load_contact_details()
 
@@ -298,7 +298,7 @@ class TestLoadContactDetails:
     def test_file_not_found_handling(self, monkeypatch):
         """Missing contact_details.json should raise FileNotFoundError."""
         monkeypatch.setattr(
-            "src.data_loader.CONTACT_DETAILS_FILE",
+            "invoice_generator.data_loader.CONTACT_DETAILS_FILE",
             "/nonexistent/contact_details.json"
         )
 
@@ -315,7 +315,7 @@ class TestLoadContactDetails:
         test_file = tmp_path / "contact_details.json"
         test_file.write_text(json.dumps(invalid_contact))
 
-        monkeypatch.setattr("src.data_loader.CONTACT_DETAILS_FILE", str(test_file))
+        monkeypatch.setattr("invoice_generator.data_loader.CONTACT_DETAILS_FILE", str(test_file))
 
         with pytest.raises(ValidationError):
             load_contact_details()

@@ -16,16 +16,16 @@ from typing import Any
 from rich.progress import track
 from rich.console import Console
 
-from src.formatting import (
+from invoice_generator.formatting import (
     format_british_date,
     format_24h_time,
     format_hours_minutes,
     format_currency
 )
-from src.constants import OUTPUT_DIR
-from src.models import BankDetails, ContactDetails, StudentInfo
-from src.logging_config import get_logger
-from src.weasyprint_libs import configure_library_path
+from invoice_generator.constants import OUTPUT_DIR
+from invoice_generator.models import BankDetails, ContactDetails, StudentInfo
+from invoice_generator.logging_config import get_logger
+from invoice_generator.weasyprint_libs import configure_library_path
 
 # Must run before WeasyPrint is imported: it `dlopen()`s its system
 # libraries at import time and needs DYLD_FALLBACK_LIBRARY_PATH set to
@@ -37,8 +37,9 @@ from weasyprint import HTML, CSS
 logger = get_logger(__name__)
 console = Console()
 
-# Use absolute path for templates to support running tests from any directory
-PROJECT_ROOT = Path(__file__).parent.parent
+# Use absolute path for templates to support running tests from any
+# directory: src/invoice_generator/invoice_generator.py -> repo root
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 def get_invoice_period(
     start_date: datetime,
