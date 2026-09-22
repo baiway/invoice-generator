@@ -13,9 +13,11 @@ CONTACT_DETAILS_FILE = f"{DATA_DIR}/contact_details.json"
 CREDENTIALS_FILE = f"{DATA_DIR}/credentials.json"
 TOKEN_FILE = f"{DATA_DIR}/token.json"
 
-TEMPLATE_DIR = "template"
-INVOICE_TEMPLATE = f"{TEMPLATE_DIR}/invoice-template.html"
-STYLES_CSS = f"{TEMPLATE_DIR}/styles.css"
+# Templates ship inside the package; these name the resource, not a path
+TEMPLATE_PACKAGE = "invoice_generator"
+TEMPLATE_DIR = "templates"
+INVOICE_TEMPLATE = "invoice-template.html"
+STYLES_CSS = "styles.css"
 
 OUTPUT_DIR = "invoices"
 LOG_FILE = "invoice-generator.log"

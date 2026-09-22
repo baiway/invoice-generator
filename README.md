@@ -217,7 +217,10 @@ invoice-generator/
 │       ├── logging_config.py     # Logging setup (file + console handlers)
 │       ├── utils.py              # Date utilities
 │       ├── formatting.py         # Display formatting (dates, times, currency)
-│       └── weasyprint_libs.py    # macOS library path setup for WeasyPrint
+│       ├── weasyprint_libs.py    # macOS library path setup for WeasyPrint
+│       └── templates/            # Invoice template, shipped with the package
+│           ├── invoice-template.html
+│           └── styles.css
 ├── tests/                    # Test suite
 │   ├── conftest.py           # Pytest fixtures and test data
 │   ├── test_calendar_api.py  # Google Calendar API tests (mocked)
@@ -236,9 +239,6 @@ invoice-generator/
 │   ├── contact_details.json
 │   ├── credentials.json
 │   └── token.json
-├── template/                 # Invoice template
-│   ├── invoice-template.html
-│   └── styles.css
 └── invoices/                 # Generated PDFs (git-ignored)
 ```
 

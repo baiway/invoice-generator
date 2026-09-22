@@ -9,8 +9,9 @@ import pandas as pd
 import sys
 import calendar
 from datetime import datetime
+from importlib import resources
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, PackageLoader, select_autoescape
 from bs4 import BeautifulSoup
 from typing import Any
 from rich.progress import track
@@ -22,7 +23,13 @@ from invoice_generator.formatting import (
     format_hours_minutes,
     format_currency
 )
-from invoice_generator.constants import OUTPUT_DIR
+from invoice_generator.constants import (
+    INVOICE_TEMPLATE,
+    OUTPUT_DIR,
+    STYLES_CSS,
+    TEMPLATE_DIR,
+    TEMPLATE_PACKAGE,
+)
 from invoice_generator.models import BankDetails, ContactDetails, StudentInfo
 from invoice_generator.logging_config import get_logger
 from invoice_generator.weasyprint_libs import configure_library_path
@@ -36,10 +43,6 @@ from weasyprint import HTML, CSS
 
 logger = get_logger(__name__)
 console = Console()
-
-# Use absolute path for templates to support running tests from any
-# directory: src/invoice_generator/invoice_generator.py -> repo root
-PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 def get_invoice_period(
     start_date: datetime,
@@ -95,15 +98,20 @@ def write_invoices(
     # Initialise Jinja2 (templating) and WeasyPrint (generating PDFs)
     # and add custom filters
     env = Environment(
-        loader=FileSystemLoader(str(PROJECT_ROOT)),
+        loader=PackageLoader(TEMPLATE_PACKAGE, TEMPLATE_DIR),
         autoescape=select_autoescape(["html", "xml"])
     )
     env.filters["british_date"] = format_british_date
     env.filters["time_24h"] = format_24h_time
     env.filters["hours_minutes"] = format_hours_minutes
     env.filters["currency"] = format_currency
-    template = env.get_template("template/invoice-template.html")
-    css = CSS(str(PROJECT_ROOT / "template" / "styles.css"))
+    template = env.get_template(INVOICE_TEMPLATE)
+
+    # `as_file` gives WeasyPrint a real path to resolve any relative URLs
+    # in the stylesheet against; the CSS is fully parsed on construction.
+    styles = resources.files(TEMPLATE_PACKAGE) / TEMPLATE_DIR / STYLES_CSS
+    with resources.as_file(styles) as css_path:
+        css = CSS(str(css_path))
 
     invoice_period = get_invoice_period(start_date, end_date)
 
