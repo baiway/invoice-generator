@@ -5,7 +5,7 @@ This module handles authentication and fetching events from Google Calendar.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -84,8 +84,12 @@ def fetch_events(
     """
     logger.info(f"Fetching events from {start_date.strftime('%d %B %Y')} to "
                 f"{end_date.strftime('%d %B %Y')}")
+    # googleapiclient builds the per-API methods (`events()` and friends)
+    # onto `Resource` at runtime from the discovery document, so no type
+    # checker can resolve them statically
     events_result = (
-        service.events()
+        cast(Any, service)
+        .events()
         .list(
             calendarId="primary",
             timeMin=start_date.isoformat() + "Z",

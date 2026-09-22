@@ -7,6 +7,7 @@ and provide formatting methods for display purposes.
 """
 
 import re
+from collections.abc import ItemsView, KeysView, ValuesView
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, RootModel
 
@@ -156,14 +157,14 @@ class StudentsData(RootModel[dict[str, StudentInfo]]):
         """Allow dictionary-style access."""
         return self.root[item]
 
-    def items(self):  # type: ignore
+    def items(self) -> ItemsView[str, StudentInfo]:
         """Allow .items() access like a dictionary."""
         return self.root.items()
 
-    def keys(self):  # type: ignore
+    def keys(self) -> KeysView[str]:
         """Allow .keys() access like a dictionary."""
         return self.root.keys()
 
-    def values(self):  # type: ignore
+    def values(self) -> ValuesView[StudentInfo]:
         """Allow .values() access like a dictionary."""
         return self.root.values()
