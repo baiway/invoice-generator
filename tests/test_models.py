@@ -285,6 +285,19 @@ class TestContactDetails:
             ContactDetails(**invalid_contact_details_short_phone)
         assert "10" in str(exc_info.value)  # Checks for "10 characters" message
 
+    def test_phone_number_too_few_digits_after_normalisation(self):
+        """Formatting characters must not disguise a short number.
+
+        `min_length` counts characters, so a number padded with spaces
+        clears it; only `normalise_phone_number` counts the digits.
+        """
+        with pytest.raises(ValidationError, match="at least 10 digits, got 8"):
+            ContactDetails(
+                country_code="+44",
+                phone_number="12 34 56 78",  # 11 characters, 8 digits
+                email="tutor@example.com"
+            )
+
     def test_invalid_country_code_format(
         self, invalid_contact_details_bad_country_code
     ):

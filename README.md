@@ -175,7 +175,7 @@ Invoices are saved as PDFs in the `invoices/` directory:
 
 ### Running Tests
 
-The project has a comprehensive test suite with **194 tests** achieving **99% code coverage**.
+The project has a comprehensive test suite with **195 tests** achieving **100% code coverage**.
 
 The tests import the installed `invoice_generator` package rather than the
 source directory, so the project itself must be installed first — `uv sync`
