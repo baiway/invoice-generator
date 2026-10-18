@@ -7,6 +7,7 @@ log levels, and third-party logger suppression.
 
 import pytest
 import logging
+import re
 import sys
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -168,30 +169,24 @@ class TestSetupLogging:
         assert log_file.read_text().startswith("Earlier run\n")
         assert "Later run" in log_file.read_text()
 
-    def test_log_formatters_include_timestamp_and_level(self):
-        """Log formatters should include timestamp, name, level, and message."""
-
-        root_logger = logging.getLogger()
-
+    def test_log_lines_include_timestamp_name_and_level(self):
+        """Each line of the log file should say when, where and how
+        serious, as well as what."""
         setup_logging()
 
-        # Find handlers and check formatters
-        file_handler = None
-        for handler in root_logger.handlers:
-            if isinstance(handler, logging.FileHandler):
-                file_handler = handler
-                break
-
-        assert file_handler is not None
-        assert file_handler.formatter is not None
-
-        # The format string should contain these components
-        fmt_str = file_handler.formatter._fmt
-        assert "asctime" in fmt_str
-        assert "name" in fmt_str
-        assert "levelname" in fmt_str
-        assert "message" in fmt_str
-
+        (file_handler,) = [
+            handler for handler in logging.getLogger().handlers
+            if isinstance(handler, logging.FileHandler)
+        ]
+        record = logging.LogRecord(
+            "invoice_generator.cli", logging.INFO, __file__, 1,
+            "Loading configuration files...", None, None,
+        )
+        assert re.fullmatch(
+            r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - invoice_generator\.cli"
+            r" - INFO - Loading configuration files\.\.\.",
+            file_handler.format(record),
+        )
 
     def test_console_shows_level_and_message_only(self):
         """Console lines should be short: the detail is in the log file."""

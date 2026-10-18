@@ -27,7 +27,9 @@ class TestStudentInfo:
     def test_student_info_missing_rate(self):
         """Missing rate should raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            StudentInfo(client_type="private", emails=["alice@example.com"])
+            StudentInfo.model_validate(
+                {"client_type": "private", "emails": ["alice@example.com"]}
+            )
         assert "rate" in str(exc_info.value).lower()
 
     def test_student_info_negative_rate(self):

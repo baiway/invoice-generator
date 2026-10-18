@@ -106,7 +106,7 @@ Invoices are saved as PDFs in the `invoices/` directory:
 ```shell
 uv run pytest      # tests; add `--cov` for a coverage report
 uv run ruff check  # lint
-uv run mypy src/   # type check
+uv run ty check    # type check
 ```
 
 `.github/workflows/ci.yml` runs all three on every push to `main` and every pull request, against the oldest and newest supported Python versions.

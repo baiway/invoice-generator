@@ -26,9 +26,9 @@ generate-invoices = "invoice_generator.cli:main"
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
-    "mypy>=1.8.0",
     "pypdf>=6.0.0",
     "ruff>=0.16.8",
+    "ty>=0.0.89",
 ]
 
 [tool.ruff.lint]
@@ -39,27 +39,19 @@ dev = [
 #   B             bugbear: likely mistakes rather than style
 #   UP            syntax available at the `requires-python` floor
 #   SIM           simplifications that remove code
-select = ["E4", "E7", "E9", "F", "B", "UP", "SIM"]
+#   ANN           type hints on every function, in `src/` (see below)
+select = ["E4", "E7", "E9", "F", "B", "UP", "SIM", "ANN"]
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-strict_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
+[tool.ruff.lint.per-file-ignores]
+# Tests take pytest fixtures as arguments, so annotating them adds little
+"tests/*" = ["ANN"]
 
-[[tool.mypy.overrides]]
-module = [
-    "google.*",
-    "google_auth_oauthlib.*",
-    "googleapiclient.*",
-]
-ignore_missing_imports = true
+[tool.ty.src]
+# Not `data/`: it holds private files and a separate repository
+include = ["src", "tests"]
+
+[tool.ty.terminal]
+error-on-warning = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
