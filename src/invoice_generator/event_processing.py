@@ -1,11 +1,12 @@
 """
 Event processing and classification logic.
 
-This module handles matching Google Calendar events to students,
-including event classification and student name extraction for
-different client types.
+This module matches Google Calendar events to students, either by the
+email addresses of invited attendees or, for events with no one else
+invited, by the event title.
 """
 
+import re
 import pandas as pd
 from typing import Any
 
@@ -14,95 +15,10 @@ from invoice_generator.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-
-# Event Classification Functions
-
-def classify_event(
-    event_title: str,
-    attendees: list[dict[str, Any]],
-) -> tuple[str, str | None]:
-    """
-    Classify a calendar event and extract the student name.
-
-    Args:
-        event_title: The title/summary of the calendar event
-        attendees: List of event attendees with 'email' and 'self' fields
-
-    Returns:
-        A tuple of (event_type, student_name) where:
-        - event_type: One of 'email', 'pmt', 'blue_education', 'in_person', 'unknown'
-        - student_name: Extracted student name or None if not extractable
-
-    Examples:
-        >>> classify_event("PMT - John", [{"self": True}])
-        ('pmt', None)
-
-        >>> classify_event("Oscar Sun BAC", [{"self": True}])
-        ('blue_education', 'Oscar Sun')
-
-        >>> classify_event("Tutoring Alice", [{"self": True}])
-        ('in_person', 'Alice')
-    """
-    # Check if event has attendees other than yourself
-    just_me = all(attendee.get("self", False) for attendee in attendees)
-
-    # Email-based matching (attendees present)
-    if not just_me:
-        return ("email", None)  # Name extracted via match_attendee_email()
-
-    # PMT events should be skipped (payment handled by agency)
-    if "PMT" in event_title:
-        return ("pmt", None)
-
-    # Blue Education events: "FirstName LastName BAC [other text]"
-    if "BAC" in event_title:
-        student_name = extract_blue_education_name(event_title)
-        return ("blue_education", student_name)
-
-    # In-person tutoring: "Tutoring StudentName"
-    if event_title.startswith("Tutoring "):
-        student_name = extract_in_person_name(event_title)
-        return ("in_person", student_name)
-
-    # Unknown event format
-    return ("unknown", None)
-
-
-def extract_blue_education_name(event_title: str) -> str:
-    """Extract student name from Blue Education event title, which are
-    formatted as "FirstName LastName BAC [additional info]"
-
-    Args:
-        event_title: Event title containing "BAC"
-
-    Returns:
-        Student name (first and last name only)
-
-    Examples:
-        >>> extract_blue_education_name("Joe Bloggs BAC Maths Tutoring")
-        'Joe Bloggs'
-    """
-    parts = event_title.split()
-    return f"{parts[0]} {parts[1]}"
-
-
-def extract_in_person_name(event_title: str) -> str:
-    """
-    Extract student name from in-person tutoring event title.
-
-    In-person events are formatted as "Tutoring StudentName"
-
-    Args:
-        event_title: Event title starting with "Tutoring "
-
-    Returns:
-        Student name (everything after "Tutoring ")
-
-    Examples:
-        >>> extract_in_person_name("Tutoring Joe Bloggs")
-        'Joe Bloggs'
-    """
-    return event_title.split("Tutoring ", 1)[1].strip()
+# Title formats for events with no other attendees
+PMT = re.compile(r"\bPMT\b")  # paid through the agency, so not invoiced
+BLUE_EDUCATION = re.compile(r"^(\S.*?)\s+BAC\b")  # "Joe Bloggs BAC Maths"
+IN_PERSON = re.compile(r"^Tutoring\s+(\S.*)")  # "Tutoring Joe Bloggs"
 
 
 def is_billable(event: dict[str, Any]) -> bool:
@@ -119,8 +35,7 @@ def is_billable(event: dict[str, Any]) -> bool:
     Calendar imports them with mixed semantics. Deleting one of these
     events from Calendar.app sometimes leaves a tombstone in Google
     Calendar rather than fully removing it, and that tombstone otherwise
-    leaks into invoice generation. See
-    `invoice-generator-cancellation-fix.md` for the full incident write-up.
+    leaks into invoice generation.
     """
     if event.get("status") == "cancelled":
         return False
@@ -128,60 +43,52 @@ def is_billable(event: dict[str, Any]) -> bool:
     return not summary.startswith(("canceled:", "cancelled:"))
 
 
-def match_attendee_email(
-    attendees: list[dict[str, Any]],
+def identify_student(
+    event: dict[str, Any],
     student_data: dict[str, StudentInfo],
 ) -> str | None:
-    """
-    Match event attendees to students via email addresses.
+    """Work out which student a calendar event is a lesson with.
+
+    Events with invited attendees are matched by email address. Events
+    with no one else invited are matched by title:
+    - "PMT ..." events are paid through the agency, so are skipped
+    - Blue Education: "FirstName LastName BAC [additional info]"
+    - In-person: "Tutoring StudentName"
 
     Args:
-        attendees: List of attendee dicts with 'email' field
+        event: Google Calendar event
         student_data: Dictionary mapping student names to StudentInfo models
 
     Returns:
-        Student name if match found, None otherwise
+        The student's name, or None (with the reason logged) if the
+        event is not a lesson that can be matched
 
     Examples:
-        >>> from invoice_generator.models import StudentInfo
-        >>> students = {"Alice": StudentInfo(client_type="private", rate=50.0, emails=["alice@example.com"])}
-        >>> match_attendee_email([{"email": "alice@example.com"}], students)
+        >>> identify_student({"summary": "Joe Bloggs BAC Maths"}, {})
+        'Joe Bloggs'
+        >>> identify_student({"summary": "Tutoring Alice"}, {})
         'Alice'
     """
-    for attendee in attendees:
-        email = attendee.get("email")
-        if not email:
-            continue
+    title = event.get("summary", "")
+    attendees = event.get("attendees", [])
 
-        for student_name, info in student_data.items():
-            if email in info.emails:
-                return student_name
+    if not all(attendee.get("self", False) for attendee in attendees):
+        for attendee in attendees:
+            for student_name, info in student_data.items():
+                if attendee.get("email") in info.emails:
+                    return student_name
+        logger.warning(f"Attendees not found in students.json: {attendees}")
+        return None
 
-    return None
+    if PMT.search(title):
+        logger.debug(f"Skipping PMT event: {title}")
+        return None
 
-
-# Event Processing Functions
-
-def attendee_match(
-    attendees: list[dict[str, Any]],
-    student_data: dict[str, StudentInfo],
-) -> str:
-    """Attempts to match Google Calendar attendees with email address in students.json.
-
-    Args:
-        attendees: List of event attendees
-        student_data: Dictionary mapping student names to StudentInfo models
-
-    Returns:
-        Student name if found, empty string otherwise
-    """
-    student_name = match_attendee_email(attendees, student_data)
-
-    if student_name:
-        return student_name
-
-    logger.warning(f"Attendees not found in students.json: {attendees}")
-    return ""
+    match = BLUE_EDUCATION.match(title) or IN_PERSON.match(title)
+    if match is None:
+        logger.warning(f"Skipping event with unexpected format: '{title}'")
+        return None
+    return match.group(1).strip()
 
 
 def process_events(
@@ -191,11 +98,6 @@ def process_events(
 ) -> pd.DataFrame:
     """Match Google Calendar events to students and extract lesson information.
 
-    This function processes calendar events and matches them to students using:
-    - Email-based matching via attendee email addresses
-    - Event title parsing for specific client types (Blue Education, in-person)
-    - Filtering by student names if specified
-
     Args:
         events: List of Google Calendar events
         student_data: Dictionary mapping student names to StudentInfo models
@@ -203,73 +105,41 @@ def process_events(
 
     Returns:
         DataFrame with columns: student, start, end, rate, client_type
-
-    Notes:
-        - PMT events are skipped (payments handled separately)
-        - Blue Education events: "FirstName LastName BAC [...]"
-        - In-person events: "Tutoring StudentName"
-        - Events not matching any pattern are logged and skipped
     """
     lessons: list[list[Any]] = []
 
-    # Process events
     for event in events:
+        title = event.get("summary")
         if not is_billable(event):
-            logger.debug(
-                f"Skipping cancelled event: {event.get('summary') or '<no title>'}"
-            )
+            logger.debug(f"Skipping cancelled event: {title or '<no title>'}")
             continue
-
-        event_title = event.get("summary", "")
-        if not event_title:
+        if not title:
             logger.debug("Skipping event with no title")
             continue
 
-        attendees = event.get("attendees", [])
-        student_name: str | None = None
-
-        # Classify event and extract student name
-        event_type, extracted_name = classify_event(event_title, attendees)
-
-        if event_type == "email":
-            student_name = attendee_match(attendees, student_data)
-        elif event_type == "pmt":
-            logger.debug(f"Skipping PMT event: {event_title}")
+        student_name = identify_student(event, student_data)
+        if student_name is None:
             continue
-        elif event_type in ("blue_education", "in_person"):
-            student_name = extracted_name
-        else:
-            logger.warning(f"Skipping event with unexpected format: '{event_title}'")
-            continue
-
-        # Validate student name was extracted
-        if not student_name:
-            logger.warning(
-                f"Could not extract student_name from '{event_title}'. Skipping event."
-            )
-            continue
-
-        # Filter by students_to_invoice if specified
         if students_to_invoice and student_name not in students_to_invoice:
             continue
-
-        # Extract student details from student_data
-        try:
-            student_info = student_data[student_name]
-            rate = student_info.rate
-            client_type = student_info.client_type
-        except KeyError:
+        if student_name not in student_data:
             logger.error(
                 f"Student '{student_name}' not found in students.json. "
                 f"Please add their details before generating invoices."
             )
             continue
 
-        # Extract event times
-        start = event["start"]["dateTime"]
-        end = event["end"]["dateTime"]
+        # All-day events have a `date` rather than a `dateTime`
+        start = event["start"].get("dateTime")
+        end = event["end"].get("dateTime")
+        if not (start and end):
+            logger.warning(f"Skipping all-day event: '{title}'")
+            continue
 
-        lessons.append([student_name, start, end, rate, client_type])
+        student_info = student_data[student_name]
+        lessons.append(
+            [student_name, start, end, student_info.rate, student_info.client_type]
+        )
 
     df = pd.DataFrame(
         lessons, columns=["student", "start", "end", "rate", "client_type"]

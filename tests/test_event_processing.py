@@ -2,89 +2,14 @@
 Tests for src/invoice_generator/event_processing.py event classification logic.
 """
 
+import logging
 import pytest
+import pandas as pd
 from invoice_generator.event_processing import (
-    classify_event,
-    extract_blue_education_name,
-    extract_in_person_name,
+    identify_student,
     is_billable,
-    match_attendee_email,
+    process_events,
 )
-
-
-class TestClassifyEvent:
-    """Tests for classify_event function."""
-
-    def test_email_classification(self):
-        """Events with non-self attendees should be classified as 'email'."""
-        attendees = [
-            {"email": "tutor@example.com", "self": True},
-            {"email": "student@example.com", "self": False}
-        ]
-        event_type, name = classify_event("Any title", attendees)
-        assert event_type == "email"
-        assert name is None
-
-    def test_pmt_classification(self):
-        """Events with PMT in title should be classified as 'pmt'."""
-        attendees = [{"email": "tutor@example.com", "self": True}]
-        event_type, name = classify_event("PMT payment", attendees)
-        assert event_type == "pmt"
-        assert name is None
-
-    def test_blue_education_classification(self):
-        """Blue Education events should extract student name."""
-        attendees = [{"email": "tutor@example.com", "self": True}]
-        event_type, name = classify_event("John Smith BAC Physics", attendees)
-        assert event_type == "blue_education"
-        assert name == "John Smith"
-
-    def test_in_person_classification(self):
-        """In-person events should extract student name."""
-        attendees = [{"email": "tutor@example.com", "self": True}]
-        event_type, name = classify_event("Tutoring Alice Johnson", attendees)
-        assert event_type == "in_person"
-        assert name == "Alice Johnson"
-
-    def test_unknown_classification(self):
-        """Events that don't match patterns should be 'unknown'."""
-        attendees = [{"email": "tutor@example.com", "self": True}]
-        event_type, name = classify_event("Random meeting", attendees)
-        assert event_type == "unknown"
-        assert name is None
-
-
-class TestExtractBlueEducationName:
-    """Tests for extract_blue_education_name function."""
-
-    def test_standard_format(self):
-        """Standard BAC format should extract first and last name."""
-        assert extract_blue_education_name("John Smith BAC") == "John Smith"
-
-    def test_with_additional_info(self):
-        """Additional info should be ignored."""
-        assert extract_blue_education_name("Alice Jones BAC Maths") == "Alice Jones"
-
-    def test_insufficient_parts(self):
-        """Events with only one word should raise IndexError."""
-        with pytest.raises(IndexError):
-            extract_blue_education_name("BAC")
-
-
-class TestExtractInPersonName:
-    """Tests for extract_in_person_name function."""
-
-    def test_simple_name(self):
-        """Simple names should be extracted correctly."""
-        assert extract_in_person_name("Tutoring Alice") == "Alice"
-
-    def test_full_name(self):
-        """Full names with spaces should be preserved."""
-        assert extract_in_person_name("Tutoring Bob Smith Jones") == "Bob Smith Jones"
-
-    def test_whitespace_handling(self):
-        """Leading/trailing whitespace should be stripped."""
-        assert extract_in_person_name("Tutoring  Alice  ") == "Alice"
 
 
 class TestIsBillable:
@@ -142,67 +67,90 @@ class TestIsBillable:
         assert is_billable(event) is True
 
 
-class TestMatchAttendeeEmail:
-    """Tests for match_attendee_email function."""
-
-    def test_successful_match(self, sample_students_data):
-        """Email match should return student name."""
-        attendees = [{"email": "alice@example.com"}]
-        result = match_attendee_email(attendees, sample_students_data)
-        assert result == "Alice Smith"
-
-    def test_secondary_email_match(self, sample_students_data):
-        """Should match any email in student's email list."""
-        attendees = [{"email": "alice@school.edu"}]
-        result = match_attendee_email(attendees, sample_students_data)
-        assert result == "Alice Smith"
-
-    def test_no_match(self, sample_students_data):
-        """Unknown email should return None."""
-        attendees = [{"email": "unknown@example.com"}]
-        result = match_attendee_email(attendees, sample_students_data)
-        assert result is None
-
-    def test_empty_attendees(self, sample_students_data):
-        """Empty attendee list should return None."""
-        result = match_attendee_email([], sample_students_data)
-        assert result is None
-
-    def test_attendee_without_email(self, sample_students_data):
-        """Attendees without email field should be skipped."""
-        attendees = [{"name": "Someone"}]
-        result = match_attendee_email(attendees, sample_students_data)
-        assert result is None
+ME = {"email": "tutor@example.com", "self": True}
 
 
-class TestAttendeeMatch:
-    """Tests for attendee_match function."""
+def event(summary, *attendees):
+    """A minimal calendar event."""
+    return {"summary": summary, "attendees": [ME, *attendees]}
 
-    def test_successful_email_match_returns_student_name(
-        self, sample_students_data
-    ):
-        """Successful email match should return student name."""
-        from invoice_generator.event_processing import attendee_match
 
-        attendees = [{"email": "alice@example.com"}]
-        result = attendee_match(attendees, sample_students_data)
-        assert result == "Alice Smith"
+class TestIdentifyStudent:
+    """Tests for identify_student function."""
 
-    def test_no_match_logs_warning_and_returns_empty_string(
-        self, sample_students_data, caplog
-    ):
-        """No match should log warning and return empty string."""
-        import logging
-        from invoice_generator.event_processing import attendee_match
+    def test_matches_invited_attendee_by_email(self, sample_students_data):
+        """Events with other attendees should be matched by email."""
+        e = event("Any title", {"email": "alice@example.com"})
+        assert identify_student(e, sample_students_data) == "Alice Smith"
 
-        attendees = [{"email": "unknown@example.com"}]
+    def test_matches_any_of_a_students_emails(self, sample_students_data):
+        """Should match any email in the student's list."""
+        e = event("Any title", {"email": "alice@school.edu"})
+        assert identify_student(e, sample_students_data) == "Alice Smith"
+
+    def test_attendees_take_precedence_over_title(self, sample_students_data):
+        """A recognisable title should not override the attendee list."""
+        e = event("Tutoring Bob Jones", {"email": "alice@example.com"})
+        assert identify_student(e, sample_students_data) == "Alice Smith"
+
+    def test_unknown_attendee_logs_warning(self, sample_students_data, caplog):
+        """No email match should log the attendees and return None."""
+        e = event("Any title", {"email": "unknown@example.com"})
 
         with caplog.at_level(logging.WARNING):
-            result = attendee_match(attendees, sample_students_data)
+            assert identify_student(e, sample_students_data) is None
 
-        assert result == ""
         assert "Attendees not found in students.json" in caplog.text
         assert "unknown@example.com" in caplog.text
+
+    def test_attendee_without_email_is_ignored(self, sample_students_data):
+        """Attendees without an email field should not match anyone."""
+        assert identify_student(event("Any", {"name": "Someone"}), sample_students_data) is None
+
+    def test_no_attendees_falls_back_to_title(self):
+        """Events with no attendee list at all are matched by title."""
+        assert identify_student({"summary": "Tutoring Alice"}, {}) == "Alice"
+
+    def test_pmt_events_are_skipped(self, caplog):
+        """PMT events are paid through the agency and so not invoiced."""
+        with caplog.at_level(logging.DEBUG):
+            assert identify_student(event("PMT - Payment received"), {}) is None
+        assert "Skipping PMT event" in caplog.text
+
+    @pytest.mark.parametrize("title, name", [
+        ("John Smith BAC", "John Smith"),
+        ("Alice Jones BAC Maths", "Alice Jones"),
+        ("Mark Mai BAC Bailey iG_GCSE Physics AQA_5", "Mark Mai"),
+        ("Anna Maria Lopez BAC Physics", "Anna Maria Lopez"),
+    ])
+    def test_blue_education_title(self, title, name):
+        """The student's name is everything before "BAC"."""
+        assert identify_student(event(title), {}) == name
+
+    @pytest.mark.parametrize("title, name", [
+        ("Tutoring Alice", "Alice"),
+        ("Tutoring Bob Smith Jones", "Bob Smith Jones"),
+        ("Tutoring  Alice  ", "Alice"),
+    ])
+    def test_in_person_title(self, title, name):
+        """The student's name is everything after "Tutoring"."""
+        assert identify_student(event(title), {}) == name
+
+    def test_bac_must_be_a_whole_word(self):
+        """A surname starting "BAC" is not a Blue Education booking."""
+        assert identify_student(event("Tutoring Joe BACKHOUSE"), {}) == "Joe BACKHOUSE"
+
+    @pytest.mark.parametrize("title", [
+        "Random meeting",
+        "BAC",  # no name before it
+        "Tutoring",  # no name after it
+        "Tutoring   ",
+    ])
+    def test_unrecognised_title_logs_warning(self, title, caplog):
+        """Titles that don't name a student are logged and skipped."""
+        with caplog.at_level(logging.WARNING):
+            assert identify_student(event(title), {}) is None
+        assert "unexpected format" in caplog.text
 
 
 class TestProcessEvents:
@@ -212,7 +160,6 @@ class TestProcessEvents:
         self, sample_students_data
     ):
         """Email-based events should be matched via attendee email."""
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -240,7 +187,6 @@ class TestProcessEvents:
         self, comprehensive_students_data
     ):
         """Blue Education events should extract name from title."""
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -265,7 +211,6 @@ class TestProcessEvents:
         self, sample_students_data
     ):
         """In-person events should extract name from title."""
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -289,8 +234,6 @@ class TestProcessEvents:
         self, sample_students_data, caplog
     ):
         """PMT events should be skipped with debug log."""
-        import logging
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -315,8 +258,6 @@ class TestProcessEvents:
         self, sample_students_data, caplog
     ):
         """Unknown format events should be skipped with warning log."""
-        import logging
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -342,8 +283,6 @@ class TestProcessEvents:
         self, sample_students_data, caplog
     ):
         """Events with no title should be skipped with debug log."""
-        import logging
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -364,12 +303,10 @@ class TestProcessEvents:
         assert len(df) == 0
         assert "Skipping event with no title" in caplog.text
 
-    def test_skip_events_where_student_name_cannot_be_extracted(
+    def test_skip_events_with_unknown_attendees(
         self, sample_students_data, caplog
     ):
-        """Events where student name can't be extracted should be skipped."""
-        import logging
-        from invoice_generator.event_processing import process_events
+        """Events whose attendees match no student should be skipped."""
 
         # Email-based event but attendee not in student_data
         events = [
@@ -392,13 +329,28 @@ class TestProcessEvents:
             )
 
         assert len(df) == 0
-        assert "Could not extract student_name" in caplog.text
+        assert "Attendees not found in students.json" in caplog.text
+
+    def test_skip_all_day_events(self, sample_students_data, caplog):
+        """All-day events have no times to bill, so are skipped, not a crash."""
+        events = [
+            {
+                "summary": "Tutoring Alice Smith",
+                "start": {"date": "2024-01-15"},
+                "end": {"date": "2024-01-16"}
+            }
+        ]
+
+        with caplog.at_level(logging.WARNING):
+            df = process_events(events, sample_students_data, [])
+
+        assert len(df) == 0
+        assert "Skipping all-day event: 'Tutoring Alice Smith'" in caplog.text
 
     def test_filter_by_students_to_invoice_list(
         self, sample_students_data
     ):
         """Should only process events for specified students."""
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -429,8 +381,6 @@ class TestProcessEvents:
         self, sample_students_data, caplog
     ):
         """Student not found in student_data should log error."""
-        import logging
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -455,8 +405,6 @@ class TestProcessEvents:
         self, sample_students_data
     ):
         """DataFrame start/end columns should be converted to UTC datetime."""
-        import pandas as pd
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -482,7 +430,6 @@ class TestProcessEvents:
         self, sample_students_data
     ):
         """Empty events list should return empty DataFrame with correct columns."""
-        from invoice_generator.event_processing import process_events
 
         df = process_events(
             [],
@@ -497,7 +444,6 @@ class TestProcessEvents:
         self, sample_students_data
     ):
         """Cancelled events should be filtered out before invoice generation."""
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
@@ -537,8 +483,6 @@ class TestProcessEvents:
         self, sample_students_data, caplog
     ):
         """Should log summary of processed lessons."""
-        import logging
-        from invoice_generator.event_processing import process_events
 
         events = [
             {
