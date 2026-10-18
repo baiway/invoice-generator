@@ -4,7 +4,8 @@ Generates PDF invoices from Google Calendar events by matching attendee email ad
 
 ## Requirements
 - Python >= 3.11
-- [uv](https://github.com/astral-sh/uv) (recommended) or `pip` for dependency management
+- [uv](https://github.com/astral-sh/uv)
+- [Homebrew](https://brew.sh) and WeasyPrint's system libraries (`brew install weasyprint`); see [WeasyPrint's installation docs](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation) for other platforms
 - Google Calendar API credentials (instructions below)
 - A consistent naming scheme for your Google Calendar events (e.g. "Tutoring Joe Bloggs")
 
@@ -18,70 +19,21 @@ Generates PDF invoices from Google Calendar events by matching attendee email ad
 For detailed steps, refer to the [official Google Calendar API documentation](https://developers.google.com/calendar/quickstart/python).
 
 ### Installation
-
-#### Using uv (Recommended)
-
-**1. Install uv:**
-```shell
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# Or via pip
-pip install uv
-```
-
-**2. Clone the project:**
 ```shell
 git clone https://github.com/baiway/invoice-generator.git
 cd invoice-generator
-```
-
-**3. (macOS only) Install WeasyPrint system libraries via Homebrew:**
-
-WeasyPrint requires several system libraries (Cairo, Pango, etc.) that are not bundled with the Python package.
-
-```shell
 brew install weasyprint
-```
-
-No further setup is needed: `src/invoice_generator/weasyprint_libs.py` adds the Homebrew lib directory to `DYLD_FALLBACK_LIBRARY_PATH` in-process before WeasyPrint is imported, so there is nothing to export in your shell profile.
-
-**4. Install dependencies:**
-```shell
 uv sync
 ```
 
-This creates a virtual environment and installs all dependencies including dev dependencies (pytest, mypy, etc.).
-
-#### Using pip
-
-If you prefer pip:
-
-```shell
-python -m venv .venv
-source .venv/bin/activate
-pip install -e . --group dev
-```
-
-The `--group` flag needs pip 25.1 or newer; development dependencies are
-declared in `[dependency-groups]` (PEP 735) rather than as an extra. For
-runtime dependencies only, `pip install -e .` is enough.
-
 ### Setup
-**1. Configure student data:** Create a directory called `data` in the root directory of the project
+**1. Create a `data` directory** in the root directory of the project and move `credentials.json` into it:
 ```shell
 mkdir data
-```
-
-**2. Move `credentials.json` into the `data` directory**
-```shell
 mv ~/Downloads/credentials.json ./data
 ```
 
-**3. Create three files in the `data` directory:** `students.json`, `bank_details.json`, and `contact_details.json`. Examples of each are shown below.
+**2. Create three files in the `data` directory:** `students.json`, `bank_details.json`, and `contact_details.json`. Examples of each are shown below.
 
 `students.json`:
 ```json
@@ -128,60 +80,21 @@ mv ~/Downloads/credentials.json ./data
 
 ## Usage
 
-Installing the project puts a `generate-invoices` command inside the project's
-virtual environment — not on your PATH. There are two ways to reach it.
-
-Run it through uv, which needs no activation and works from anywhere in the
-repository:
-
+Generate invoices for the last full month:
 ```shell
 uv run generate-invoices
 ```
 
-Or activate the environment once per shell, after which the bare command works:
-
-```shell
-source .venv/bin/activate       # Windows: .venv\Scripts\activate
-generate-invoices
-```
-
-The examples below assume an activated environment; prefix them with `uv run`
-otherwise. Running `python generate-invoices.py` from the repository root is
-equivalent to `generate-invoices`, and needs the same environment — it imports
-the installed package, so it fails with `ModuleNotFoundError` from a shell where
-the environment is neither activated nor supplied by `uv run`.
-
-### Basic Usage
-
-Generate invoices for the last full month:
-```shell
-generate-invoices
-```
-
-### Advanced Options
-
+Some other options:
 ```shell
 # Generate for specific students only
-generate-invoices --only "Alice" "Bob"
+uv run generate-invoices --only "Alice" "Bob"
 
 # Custom date range
-generate-invoices --from 2024-01-01 --to 2024-01-31
+uv run generate-invoices --from 2024-01-01 --to 2024-01-31
 
-# Custom start date (end defaults to today)
-generate-invoices --from 2024-01-01
-
-# Read configuration from somewhere else, write invoices somewhere else
-generate-invoices --data-dir ~/tutoring/data --output-dir ~/tutoring/invoices
-```
-
-Paths are resolved against the directory you run the command from, so
-`generate-invoices` run in `~/tutoring` reads `~/tutoring/data/students.json`
-and writes to `~/tutoring/invoices/` unless told otherwise. The detailed log
-(`invoice-generator.log`) is likewise written to the current directory.
-
-For all options:
-```shell
-generate-invoices --help
+# All options
+uv run generate-invoices --help
 ```
 
 ### Output
@@ -192,71 +105,19 @@ Invoices are saved as PDFs in the `invoices/` directory:
 
 ## Development
 
-### Running Tests
-
-The project has a comprehensive test suite with **195 tests** achieving **100% code coverage**.
-
-The tests import the installed `invoice_generator` package rather than the
-source directory, so the project itself must be installed first — `uv sync`
-and `pip install -e . --group dev` both do this.
-
-As with `generate-invoices`, the development tools below live in the project's
-virtual environment: activate it first, or prefix each command with `uv run`
-(`uv run pytest`, `uv run mypy src/ generate-invoices.py`, `uv run ruff check`).
-
-Coverage is not collected by default; pass `--cov` when you want it.
-
 ```shell
-# Run all tests
-pytest
-
-# Run all tests with verbose output
-pytest -v
-
-# With coverage report (terminal)
-pytest --cov --cov-report=term-missing
-
-# With coverage report (HTML)
-pytest --cov --cov-report=html
-# Then open htmlcov/index.html in your browser
-
-# Run specific test file
-pytest tests/test_models.py
-
-# Run specific test class
-pytest tests/test_models.py::TestStudentInfo
-
-# Run specific test
-pytest tests/test_models.py::TestStudentInfo::test_valid_student_info
+uv run pytest                          # tests; add `--cov` for a coverage report
+uv run ruff check                      # lint
+uv run mypy src/ generate-invoices.py  # type check
 ```
 
-### Linting
-
-```shell
-ruff check
-```
-
-Ruff is configured for linting only — there is no formatter and no
-import-order rule, so it reports likely mistakes rather than style
-preferences. See `[tool.ruff.lint]` in `pyproject.toml` for the rule set.
-
-### Type Checking
-
-```shell
-mypy src/ generate-invoices.py
-```
-
-### Continuous Integration
-
-`.github/workflows/ci.yml` runs the lint, type check and test suite on
-every push to `main` and every pull request, against the oldest and
-newest supported Python versions.
+`.github/workflows/ci.yml` runs all three on every push to `main` and every pull request, against the oldest and newest supported Python versions.
 
 ### Project Structure
 
 ```
 invoice-generator/
-├── pyproject.toml            # Project configuration with uv support
+├── pyproject.toml            # Project configuration
 ├── uv.lock                   # Exact versions of every dependency
 ├── generate-invoices.py      # Wrapper for the installed CLI
 ├── .github/workflows/ci.yml  # Lint, type check and tests on 3.11 and 3.14
@@ -277,18 +138,7 @@ invoice-generator/
 │       └── templates/            # Invoice template, shipped with the package
 │           ├── invoice-template.html
 │           └── styles.css
-├── tests/                    # Test suite
-│   ├── conftest.py           # Pytest fixtures and test data
-│   ├── test_calendar_api.py  # Google Calendar API tests (mocked)
-│   ├── test_cli.py           # CLI parsing and validation tests
-│   ├── test_data_loader.py   # JSON loading and validation tests
-│   ├── test_event_processing.py  # Event classification tests
-│   ├── test_formatting.py    # Formatting function tests
-│   ├── test_invoice_generator.py # PDF generation tests
-│   ├── test_logging_config.py    # Logging configuration tests
-│   ├── test_models.py        # Pydantic model validation tests
-│   ├── test_utils.py         # Date utility tests
-│   └── test_weasyprint_libs.py  # Library path configuration tests
+├── tests/                    # Test suite, one `test_<module>.py` per module
 ├── data/                     # Configuration files (git-ignored)
 │   ├── students.json
 │   ├── bank_details.json
@@ -314,9 +164,7 @@ If that path is outside both directories, point Python at it yourself before run
 export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib:$DYLD_FALLBACK_LIBRARY_PATH"
 ```
 
-If you still see library errors, refer to the official WeasyPrint docs:
-- [Installation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation)
-- [Troubleshooting](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting)
+If you still see library errors, refer to [WeasyPrint's troubleshooting docs](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting).
 
 ### Pydantic Validation Errors
 
