@@ -31,11 +31,28 @@ from invoice_generator.constants import (
 logger = get_logger(__name__)
 console = Console()
 
+
+def parse_date(value: str) -> datetime:
+    """Parses a YYYY-MM-DD date given on the command line."""
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"invalid date '{value}' (expected YYYY-MM-DD)"
+        ) from None
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parses command line arguments.
+    """Parses and validates command line arguments, filling in the
+    default invoice period. Invalid arguments print a usage error and
+    exit, as argparse does for its own checks.
 
     Args:
         argv: Argument list to parse. Defaults to `sys.argv[1:]`.
+
+    Returns:
+        The arguments, with `start` and `end` set to the first and last
+        moments of the invoice period
     """
 
     parser = argparse.ArgumentParser(
@@ -83,6 +100,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--from",
         dest="start",
+        type=parse_date,
+        metavar="YYYY-MM-DD",
         help=(
             "Start of the invoice period in YYYY-MM-DD format. If not "
             "specified, defaults to the start of the last full month. "
@@ -95,17 +114,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--to",
         dest="end",
+        type=parse_date,
+        metavar="YYYY-MM-DD",
         help=(
             "End of the invoice period in YYYY-MM-DD format (e.g. "
-            "2024-09-30). Cannot be specified without `--from` (raises a "
-            "ValueError). If neither are specified, defaults to the end of "
+            "2024-09-30). Cannot be specified without `--from`. If "
+            "neither are specified, defaults to the end of "
             "the last full month. For example, if the script is run on "
             "2024-09-03, the end of the invoice period will default to "
             "2024-08-31."
         )
     )
 
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+
+    if args.start is None:
+        if args.end is not None:
+            parser.error("argument --to: not allowed without --from")
+        args.start, args.end = get_last_full_month()
+    elif args.end is None:
+        args.end = datetime.today()
+
+    if args.start.date() > args.end.date():
+        parser.error(
+            f"argument --from: {args.start:%Y-%m-%d} is after the end of the "
+            f"invoice period ({args.end:%Y-%m-%d})"
+        )
+
+    # The invoice period includes the whole of its last day
+    args.end = args.end.replace(hour=23, minute=59, second=59, microsecond=0)
+    return args
+
 
 def validate_students(
     names: list[str],
@@ -126,42 +165,6 @@ def validate_students(
             "The following names passed using the `--only` option are not in "
             f"`students.json`: {', '.join(unrecognised_names)}"
         )
-
-
-def validate_invoice_period(
-    start: str | None,
-    end: str | None,
-) -> tuple[datetime, datetime]:
-    """Validates the invoice period supplied via the CLI and return the
-    specified dates as datetime objects. If `--to` is specified without
-    `--from`, raises a ValueError. If only `--from` is provided, `--to`
-    defaults to today's date. If both are empty, the function uses the
-    last full month as the date range.
-
-    Args:
-        start: Value of `--from` in YYYY-MM-DD format, or None if not given
-        end: Value of `--to` in YYYY-MM-DD format, or None if not given
-    """
-    if not start:
-        if end:
-            raise ValueError("`--to` cannot be specified without `--from`.")
-        start, end = get_last_full_month()
-    elif not end:
-        end = datetime.today().strftime("%Y-%m-%d")
-
-    try:
-        start_date = datetime.strptime(start, "%Y-%m-%d")
-        end_date = datetime.strptime(end, "%Y-%m-%d")
-        end_date = end_date.replace(hour=23, minute=59, second=59)
-    except ValueError:
-        raise ValueError(
-            "Invalid date format. Must be in YYYY-MM-DD format."
-        ) from None
-
-    if start_date > end_date:
-        raise ValueError("`--from` date cannot be later than the `--to` date.")
-
-    return start_date, end_date
 
 
 def print_inactive_students(
@@ -192,7 +195,6 @@ def main(argv: list[str] | None = None) -> None:
     # Parse and validate command line arguments
     args = parse_args(argv)
     data_dir = Path(args.data_dir)
-    start_date, end_date = validate_invoice_period(args.start, args.end)
 
     # Load and validate JSON data files
     logger.info("Loading configuration files...")
@@ -211,7 +213,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # Fetch all Google Calendar events over the invoice period
     logger.info("Fetching and processing Google Calendar events")
-    events = fetch_events(service, start_date, end_date)
+    events = fetch_events(service, args.start, args.end)
 
     # Match events to the students listed in `students.json`, giving each
     # student's lessons: {"Alice": [Lesson(start, end), ...], ...}
@@ -224,7 +226,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # Write invoices
     logger.info("Writing invoices...")
-    invoices = write_invoices(lessons, student_data, start_date, end_date,
+    invoices = write_invoices(lessons, student_data, args.start, args.end,
                               bank_details, contact_details,
                               Path(args.output_dir))
     logger.info(f"Invoices saved to: {invoices}")

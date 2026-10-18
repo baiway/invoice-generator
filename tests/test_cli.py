@@ -7,7 +7,7 @@ validation against `students.json`, and invoice period resolution.
 
 import logging
 import pytest
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -16,7 +16,6 @@ from invoice_generator.cli import (
     parse_args,
     print_inactive_students,
     validate_students,
-    validate_invoice_period,
 )
 from invoice_generator.models import StudentInfo
 from invoice_generator.utils import get_last_full_month
@@ -25,23 +24,14 @@ from invoice_generator.utils import get_last_full_month
 class TestParseArgs:
     """Tests for parse_args function."""
 
-    def test_defaults_to_empty_selection(self):
-        """No flags should leave every option unset."""
-        args = parse_args([])
-        assert args.only == []
-        assert args.start is None
-        assert args.end is None
+    def test_defaults_to_all_students(self):
+        """No `--only` should mean every student."""
+        assert parse_args([]).only == []
 
     def test_only_accepts_several_names(self):
         """`--only` should collect all following names."""
         args = parse_args(["--only", "Alice Smith", "Bob Jones"])
         assert args.only == ["Alice Smith", "Bob Jones"]
-
-    def test_from_and_to_map_to_start_and_end(self):
-        """`--from` and `--to` should land in `start` and `end`."""
-        args = parse_args(["--from", "2024-01-01", "--to", "2024-01-31"])
-        assert args.start == "2024-01-01"
-        assert args.end == "2024-01-31"
 
     def test_directories_default_to_cwd_relative_paths(self):
         """Data and output directories default to the documented names."""
@@ -84,47 +74,57 @@ class TestValidateStudents:
             validate_students(["alice smith"], sample_students_data)
 
 
-class TestValidateInvoicePeriod:
-    """Tests for validate_invoice_period function."""
-
-    def test_end_without_start_raises(self):
-        """`--to` alone is ambiguous and should be rejected."""
-        with pytest.raises(ValueError, match="cannot be specified without"):
-            validate_invoice_period(None, "2024-01-31")
+class TestInvoicePeriod:
+    """Tests for how parse_args resolves `--from` and `--to`."""
 
     def test_explicit_range_is_parsed(self):
-        """Both dates given should come back as datetimes."""
-        start, end = validate_invoice_period("2024-01-01", "2024-01-31")
-        assert start == datetime(2024, 1, 1)
-        assert end == datetime(2024, 1, 31, 23, 59, 59)
+        """Both dates given should come back as datetimes, the end
+        stretching to the last second of its day."""
+        args = parse_args(["--from", "2024-01-01", "--to", "2024-01-31"])
+        assert args.start == datetime(2024, 1, 1)
+        assert args.end == datetime(2024, 1, 31, 23, 59, 59)
 
-    def test_end_covers_the_whole_final_day(self):
-        """The end date should stretch to the last second of the day."""
-        _, end = validate_invoice_period("2024-01-01", "2024-01-01")
-        assert (end.hour, end.minute, end.second) == (23, 59, 59)
+    def test_single_day_period(self):
+        """`--from` and `--to` may be the same day."""
+        args = parse_args(["--from", "2024-01-01", "--to", "2024-01-01"])
+        assert args.end - args.start == timedelta(hours=23, minutes=59, seconds=59)
 
     def test_start_only_ends_today(self):
-        """`--from` without `--to` should run up to today."""
-        start, end = validate_invoice_period("2024-01-01", None)
-        assert start == datetime(2024, 1, 1)
-        assert end.date() == datetime.today().date()
+        """`--from` without `--to` should run up to the end of today."""
+        args = parse_args(["--from", "2024-01-01"])
+        assert args.start == datetime(2024, 1, 1)
+        assert args.end == datetime.combine(date.today(), time(23, 59, 59))
 
     def test_neither_uses_last_full_month(self):
         """No dates at all should fall back to the last full month."""
-        expected_start, expected_end = get_last_full_month()
-        start, end = validate_invoice_period(None, None)
-        assert start.strftime("%Y-%m-%d") == expected_start
-        assert end.strftime("%Y-%m-%d") == expected_end
+        first_day, last_day = get_last_full_month()
+        args = parse_args([])
+        assert args.start == first_day
+        assert args.end == last_day.replace(hour=23, minute=59, second=59)
 
-    def test_invalid_format_raises(self):
-        """Dates outside YYYY-MM-DD should be rejected."""
-        with pytest.raises(ValueError, match="Invalid date format"):
-            validate_invoice_period("01/01/2024", "31/01/2024")
+    @pytest.mark.parametrize("argv, message", [
+        (["--to", "2024-01-31"],
+         "argument --to: not allowed without --from"),
+        (["--from", "01/01/2024"],
+         "argument --from: invalid date '01/01/2024' (expected YYYY-MM-DD)"),
+        (["--from", "2024-01-01", "--to", "2024-13-01"],
+         "argument --to: invalid date '2024-13-01' (expected YYYY-MM-DD)"),
+        (["--from", "2024-02-01", "--to", "2024-01-01"],
+         "argument --from: 2024-02-01 is after the end of the invoice "
+         "period (2024-01-01)"),
+        (["--from", "9999-01-01"],
+         "argument --from: 9999-01-01 is after the end of the invoice period"),
+    ])
+    def test_invalid_period_is_a_usage_error(self, argv, message, capsys):
+        """Bad dates should exit with a one-line usage error, as argparse
+        does for its own checks, rather than a traceback."""
+        with pytest.raises(SystemExit) as exc_info:
+            parse_args(argv)
 
-    def test_start_after_end_raises(self):
-        """A reversed range should be rejected."""
-        with pytest.raises(ValueError, match="cannot be later than"):
-            validate_invoice_period("2024-02-01", "2024-01-01")
+        assert exc_info.value.code == 2
+        error = capsys.readouterr().err
+        assert error.startswith("usage: ")
+        assert message in error
 
 
 class TestPrintInactiveStudents:
