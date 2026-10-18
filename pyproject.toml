@@ -3,6 +3,8 @@ name = "invoice-generator"
 version = "0.1.0"
 description = "Generate PDF invoices from Google Calendar events"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 # Direct dependencies only, as compatibility floors: `uv.lock` pins the
 # exact versions, and `uv lock --upgrade` is how they move.
