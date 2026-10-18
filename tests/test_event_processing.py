@@ -6,6 +6,8 @@ import logging
 import pytest
 from datetime import UTC, date, datetime, timedelta
 from invoice_generator.event_processing import (
+    SkipReason,
+    Unmatched,
     find_student,
     identify_student,
     is_billable,
@@ -100,19 +102,21 @@ class TestIdentifyStudent:
         e = event("Tutoring Bob Jones", {"email": "alice@example.com"})
         assert identify_student(e, sample_students_data) == "Alice Smith"
 
-    def test_unknown_attendee_logs_warning(self, sample_students_data, caplog):
-        """No email match should log the attendees and return None."""
+    def test_unknown_attendee_raises(self, sample_students_data):
+        """No email match should raise, naming the attendees."""
         e = event("Any title", {"email": "unknown@example.com"})
 
-        with caplog.at_level(logging.WARNING):
-            assert identify_student(e, sample_students_data) is None
+        with pytest.raises(Unmatched) as exc_info:
+            identify_student(e, sample_students_data)
 
-        assert "Attendees not found in students.json" in caplog.text
-        assert "unknown@example.com" in caplog.text
+        assert exc_info.value.reason is SkipReason.UNKNOWN_ATTENDEES
+        assert exc_info.value.detail == "unknown@example.com"
 
     def test_attendee_without_email_is_ignored(self, sample_students_data):
         """Attendees without an email field should not match anyone."""
-        assert identify_student(event("Any", {"name": "Someone"}), sample_students_data) is None
+        with pytest.raises(Unmatched) as exc_info:
+            identify_student(event("Any", {"name": "Someone"}), sample_students_data)
+        assert exc_info.value.detail == "<no email>"
 
     def test_no_attendees_falls_back_to_title(self):
         """Events with no attendee list at all are matched by title."""
@@ -152,11 +156,12 @@ class TestIdentifyStudent:
         title = "Tutoring Joe BACKHOUSE"
         assert identify_student(event(title), students("Joe BACKHOUSE")) == "Joe BACKHOUSE"
 
-    def test_title_naming_unknown_student_logs_error(self, caplog):
+    def test_title_naming_unknown_student_raises(self):
         """A lesson with someone not in students.json should say who."""
-        with caplog.at_level(logging.ERROR):
-            assert identify_student(event("Tutoring Zed"), students("Alice")) is None
-        assert "Student 'Zed' not found in students.json" in caplog.text
+        with pytest.raises(Unmatched) as exc_info:
+            identify_student(event("Tutoring Zed"), students("Alice"))
+        assert exc_info.value.reason is SkipReason.UNKNOWN_STUDENT
+        assert exc_info.value.detail == "Zed"
 
     @pytest.mark.parametrize("title", [
         "Random meeting",
@@ -165,11 +170,11 @@ class TestIdentifyStudent:
         "Tutoring",  # no name after it
         "Tutoring   ",
     ])
-    def test_unrecognised_title_logs_warning(self, title, caplog):
-        """Titles that aren't lessons are logged and skipped."""
-        with caplog.at_level(logging.WARNING):
-            assert identify_student(event(title), students("Alice")) is None
-        assert "unexpected format" in caplog.text
+    def test_unrecognised_title_raises(self, title):
+        """Titles that aren't lessons are reported as unexpected."""
+        with pytest.raises(Unmatched) as exc_info:
+            identify_student(event(title), students("Alice"))
+        assert exc_info.value.reason is SkipReason.UNEXPECTED_FORMAT
 
 
 class TestFindStudent:
@@ -196,20 +201,22 @@ class TestFindStudent:
         "Alice Smithson",
         "Zed",
     ])
-    def test_no_match_logs_error(self, name, caplog):
+    def test_no_match_raises(self, name):
         """Names that aren't the start of anyone's name don't match."""
-        with caplog.at_level(logging.ERROR):
-            assert find_student(name, self.ROSTER) is None
-        assert f"Student '{name}' not found in students.json" in caplog.text
+        with pytest.raises(Unmatched) as exc_info:
+            find_student(name, self.ROSTER)
+        assert exc_info.value.reason is SkipReason.UNKNOWN_STUDENT
+        assert exc_info.value.detail == name
 
-    def test_shared_first_name_is_not_guessed(self, caplog):
+    def test_shared_first_name_is_not_guessed(self):
         """Two students with the same first name: skip, naming both."""
         roster = students("Alice Smith", "Alice Jones")
 
-        with caplog.at_level(logging.WARNING):
-            assert find_student("Alice", roster) is None
+        with pytest.raises(Unmatched) as exc_info:
+            find_student("Alice", roster)
 
-        assert "'Alice' could be any of Alice Smith, Alice Jones" in caplog.text
+        assert exc_info.value.reason is SkipReason.AMBIGUOUS_STUDENT
+        assert "Alice Smith or Alice Jones" in exc_info.value.detail
 
 
 class TestProcessEvents:
@@ -232,7 +239,7 @@ class TestProcessEvents:
             }
         ]
 
-        lessons = process_events(
+        lessons, skipped = process_events(
             events,
             sample_students_data,
             []
@@ -255,7 +262,7 @@ class TestProcessEvents:
             }
         ]
 
-        lessons = process_events(
+        lessons, skipped = process_events(
             events,
             comprehensive_students_data,
             []
@@ -277,7 +284,7 @@ class TestProcessEvents:
             }
         ]
 
-        lessons = process_events(
+        lessons, skipped = process_events(
             events,
             sample_students_data,
             []
@@ -300,19 +307,19 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.DEBUG):
-            lessons = process_events(
+            lessons, skipped = process_events(
                 events,
                 sample_students_data,
                 []
             )
 
-        assert lessons == {}
+        assert (lessons, skipped) == ({}, [])
         assert "Skipping PMT event" in caplog.text
 
     def test_skip_unknown_format_events(
-        self, sample_students_data, caplog
+        self, sample_students_data
     ):
-        """Unknown format events should be skipped with warning log."""
+        """Unknown format events should be skipped and reported."""
 
         events = [
             {
@@ -323,16 +330,16 @@ class TestProcessEvents:
             }
         ]
 
-        with caplog.at_level(logging.WARNING):
-            lessons = process_events(
-                events,
-                sample_students_data,
-                []
-            )
+        lessons, skipped = process_events(
+            events,
+            sample_students_data,
+            []
+        )
 
         assert lessons == {}
-        assert "Skipping event with unexpected format" in caplog.text
-        assert "Doctor appointment" in caplog.text
+        assert [(s.reason, s.event["summary"]) for s in skipped] == [
+            (SkipReason.UNEXPECTED_FORMAT, "Doctor appointment")
+        ]
 
     def test_skip_events_with_no_title(
         self, sample_students_data, caplog
@@ -349,17 +356,17 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.DEBUG):
-            lessons = process_events(
+            lessons, skipped = process_events(
                 events,
                 sample_students_data,
                 []
             )
 
-        assert lessons == {}
+        assert (lessons, skipped) == ({}, [])
         assert "Skipping event with no title" in caplog.text
 
     def test_skip_events_with_unknown_attendees(
-        self, sample_students_data, caplog
+        self, sample_students_data
     ):
         """Events whose attendees match no student should be skipped."""
 
@@ -376,17 +383,32 @@ class TestProcessEvents:
             }
         ]
 
-        with caplog.at_level(logging.WARNING):
-            lessons = process_events(
-                events,
-                sample_students_data,
-                []
-            )
+        lessons, skipped = process_events(
+            events,
+            sample_students_data,
+            []
+        )
 
         assert lessons == {}
-        assert "Attendees not found in students.json" in caplog.text
+        assert [s.reason for s in skipped] == [SkipReason.UNKNOWN_ATTENDEES]
 
-    def test_skip_all_day_events(self, sample_students_data, caplog):
+    def test_skips_are_logged_quietly(self, sample_students_data, caplog):
+        """Skipped events are listed at the end of the run, so they are
+        logged for the file only, below the console's WARNING level."""
+        events = [{"summary": "Doctor appointment",
+                   "start": {"dateTime": "2024-01-19T09:00:00Z"},
+                   "end": {"dateTime": "2024-01-19T09:30:00Z"}}]
+
+        with caplog.at_level(logging.INFO):
+            process_events(events, sample_students_data, [])
+
+        (record,) = [r for r in caplog.records if "Skipped" in r.message]
+        assert record.levelno == logging.INFO
+        assert record.message == (
+            "Skipped 'Doctor appointment' with an unexpected format"
+        )
+
+    def test_skip_all_day_events(self, sample_students_data):
         """All-day events have no times to bill, so are skipped, not a crash."""
         events = [
             {
@@ -396,11 +418,10 @@ class TestProcessEvents:
             }
         ]
 
-        with caplog.at_level(logging.WARNING):
-            lessons = process_events(events, sample_students_data, [])
+        lessons, skipped = process_events(events, sample_students_data, [])
 
         assert lessons == {}
-        assert "Skipping all-day event: 'Tutoring Alice Smith'" in caplog.text
+        assert [s.reason for s in skipped] == [SkipReason.ALL_DAY]
 
     def test_filter_by_students_to_invoice_list(
         self, sample_students_data
@@ -423,7 +444,7 @@ class TestProcessEvents:
         ]
 
         # Only process Alice Smith
-        lessons = process_events(
+        lessons, skipped = process_events(
             events,
             sample_students_data,
             ["Alice Smith"]
@@ -431,10 +452,10 @@ class TestProcessEvents:
 
         assert list(lessons) == ["Alice Smith"]
 
-    def test_student_not_in_student_data_logs_error(
-        self, sample_students_data, caplog
+    def test_student_not_in_student_data_is_skipped(
+        self, sample_students_data
     ):
-        """Student not found in student_data should log error."""
+        """A title naming someone not in students.json is skipped, saying who."""
 
         events = [
             {
@@ -445,15 +466,16 @@ class TestProcessEvents:
             }
         ]
 
-        with caplog.at_level(logging.ERROR):
-            lessons = process_events(
-                events,
-                sample_students_data,
-                []
-            )
+        lessons, skipped = process_events(
+            events,
+            sample_students_data,
+            []
+        )
 
         assert lessons == {}
-        assert "Student 'Unknown Student' not found in students.json" in caplog.text
+        assert [(s.reason, s.detail) for s in skipped] == [
+            (SkipReason.UNKNOWN_STUDENT, "Unknown Student")
+        ]
 
     def test_lessons_have_timezone_aware_times(self, sample_students_data):
         """Lesson times should keep the offset Google gives them."""
@@ -465,7 +487,8 @@ class TestProcessEvents:
             }
         ]
 
-        (lesson,) = process_events(events, sample_students_data, [])["Alice Smith"]
+        lessons, _ = process_events(events, sample_students_data, [])
+        (lesson,) = lessons["Alice Smith"]
 
         assert lesson.start == datetime(2024, 7, 15, 9, 0, tzinfo=UTC)
         assert lesson.duration == timedelta(hours=1, minutes=30)
@@ -482,14 +505,14 @@ class TestProcessEvents:
                               ("Bob Jones", 17)]
         ]
 
-        lessons = process_events(events, sample_students_data, [])
+        lessons, _ = process_events(events, sample_students_data, [])
 
         assert list(lessons) == ["Bob Jones", "Alice Smith"]
         assert [lesson.start.day for lesson in lessons["Bob Jones"]] == [15, 17]
 
     def test_empty_events_list_returns_no_lessons(self, sample_students_data):
         """Empty events list should give no lessons."""
-        assert process_events([], sample_students_data, []) == {}
+        assert process_events([], sample_students_data, []) == ({}, [])
 
     def test_cancelled_events_excluded(
         self, sample_students_data
@@ -520,7 +543,7 @@ class TestProcessEvents:
             },
         ]
 
-        lessons = process_events(
+        lessons, skipped = process_events(
             events,
             sample_students_data,
             []

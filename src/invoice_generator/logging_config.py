@@ -39,7 +39,9 @@ def setup_logging(level: int = logging.INFO) -> str:
     # Console handler - only show WARNING and above to keep output clean
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.WARNING)
-    console_handler.setFormatter(detailed_formatter)
+    console_handler.setFormatter(
+        logging.Formatter("%(levelname)s: %(message)s")
+    )
 
     # Configure root logger
     root_logger = logging.getLogger()

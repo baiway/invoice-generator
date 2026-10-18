@@ -185,6 +185,25 @@ class TestSetupLogging:
         assert "message" in fmt_str
 
 
+    def test_console_shows_level_and_message_only(self, tmp_path, monkeypatch):
+        """Console lines should be short: the detail is in the log file."""
+        log_file = tmp_path / "test.log"
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
+
+        setup_logging()
+
+        (console_handler,) = [
+            handler for handler in logging.getLogger().handlers
+            if type(handler) is logging.StreamHandler and handler.stream is sys.stdout
+        ]
+        record = logging.LogRecord(
+            "invoice_generator.calendar_api", logging.WARNING, __file__, 1,
+            "Could not refresh Google token; signing in again", None, None,
+        )
+        assert console_handler.format(record) == (
+            "WARNING: Could not refresh Google token; signing in again"
+        )
+
 class TestGetLogger:
     """Tests for get_logger function."""
 

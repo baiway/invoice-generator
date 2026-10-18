@@ -9,6 +9,7 @@ invited, by the event title.
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import Any
 
 from invoice_generator.models import StudentInfo
@@ -22,6 +23,35 @@ PMT = re.compile(r"\bPMT\b")  # paid through the agency, so not invoiced
 # before "BAC", whatever separates them
 BLUE_EDUCATION = re.compile(r"^(.*?\w)\W*\bBAC\b")
 IN_PERSON = re.compile(r"^Tutoring\s+(\S.*)")  # "Tutoring Joe"
+
+
+class SkipReason(Enum):
+    """Why an event that may be a lesson couldn't be invoiced, phrased to
+    follow "Skipped events"."""
+
+    UNEXPECTED_FORMAT = "with an unexpected format"
+    UNKNOWN_ATTENDEES = "whose attendees aren't in students.json"
+    UNKNOWN_STUDENT = "naming a student not in students.json"
+    AMBIGUOUS_STUDENT = "that could be for more than one student"
+    ALL_DAY = "lasting all day"
+
+
+class Unmatched(Exception):
+    """Raised when an event can't be matched to a student."""
+
+    def __init__(self, reason: SkipReason, detail: str = "") -> None:
+        super().__init__(f"{reason.value} ({detail})" if detail else reason.value)
+        self.reason = reason
+        self.detail = detail
+
+
+@dataclass(frozen=True)
+class SkippedEvent:
+    """An event that may be a lesson but couldn't be invoiced."""
+
+    event: dict[str, Any]
+    reason: SkipReason
+    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -61,7 +91,7 @@ def is_billable(event: dict[str, Any]) -> bool:
 def find_student(
     name: str,
     student_data: dict[str, StudentInfo],
-) -> str | None:
+) -> str:
     """Find the student a name from an event title refers to.
 
     The name can be a student's full name or the start of it, such as
@@ -73,8 +103,10 @@ def find_student(
         student_data: Dictionary mapping student names to StudentInfo models
 
     Returns:
-        The student's full name as in `students.json`, or None (with the
-        reason logged) if no student, or more than one, matches
+        The student's full name as in `students.json`
+
+    Raises:
+        Unmatched: If no student, or more than one, matches
 
     Examples:
         >>> students = {"Joe Bloggs": StudentInfo(client_type="private", rate=50)}
@@ -94,16 +126,11 @@ def find_student(
     if len(candidates) == 1:
         return candidates[0]
     if candidates:
-        logger.warning(
-            f"'{name}' could be any of {', '.join(candidates)}. Use their "
-            f"full name in the event title. Skipping event."
+        raise Unmatched(
+            SkipReason.AMBIGUOUS_STUDENT,
+            f"'{name}' could be {' or '.join(candidates)}; use their full name",
         )
-    else:
-        logger.error(
-            f"Student '{name}' not found in students.json. "
-            f"Please add their details before generating invoices."
-        )
-    return None
+    raise Unmatched(SkipReason.UNKNOWN_STUDENT, name)
 
 
 def identify_student(
@@ -123,19 +150,23 @@ def identify_student(
         student_data: Dictionary mapping student names to StudentInfo models
 
     Returns:
-        The student's name as in `students.json`, or None (with the
-        reason logged) if the event is not a lesson that can be matched
+        The student's name as in `students.json`, or None if the event is
+        not a lesson to invoice
+
+    Raises:
+        Unmatched: If the event may be a lesson but can't be matched
     """
     title = event.get("summary", "")
     attendees = event.get("attendees", [])
 
-    if not all(attendee.get("self", False) for attendee in attendees):
-        for attendee in attendees:
+    invitees = [attendee for attendee in attendees if not attendee.get("self", False)]
+    if invitees:
+        for attendee in invitees:
             for student_name, info in student_data.items():
                 if attendee.get("email") in info.emails:
                     return student_name
-        logger.warning(f"Attendees not found in students.json: {attendees}")
-        return None
+        emails = [attendee.get("email", "<no email>") for attendee in invitees]
+        raise Unmatched(SkipReason.UNKNOWN_ATTENDEES, ", ".join(emails))
 
     if PMT.search(title):
         logger.debug(f"Skipping PMT event: {title}")
@@ -143,8 +174,7 @@ def identify_student(
 
     match = BLUE_EDUCATION.match(title) or IN_PERSON.match(title)
     if match is None:
-        logger.warning(f"Skipping event with unexpected format: '{title}'")
-        return None
+        raise Unmatched(SkipReason.UNEXPECTED_FORMAT)
     return find_student(match.group(1), student_data)
 
 
@@ -152,7 +182,7 @@ def process_events(
     events: list[dict[str, Any]],
     student_data: dict[str, StudentInfo],
     students_to_invoice: list[str],
-) -> dict[str, list[Lesson]]:
+) -> tuple[dict[str, list[Lesson]], list[SkippedEvent]]:
     """Match Google Calendar events to students.
 
     Args:
@@ -161,9 +191,11 @@ def process_events(
         students_to_invoice: List of specific students to process (empty = all)
 
     Returns:
-        Each student seen, mapped to their lessons in calendar order
+        Each student seen, mapped to their lessons in calendar order, and
+        the events that may be lessons but couldn't be invoiced
     """
     lessons: dict[str, list[Lesson]] = {}
+    skipped: list[SkippedEvent] = []
 
     for event in events:
         title = event.get("summary")
@@ -174,7 +206,12 @@ def process_events(
             logger.debug("Skipping event with no title")
             continue
 
-        student_name = identify_student(event, student_data)
+        try:
+            student_name = identify_student(event, student_data)
+        except Unmatched as e:
+            logger.info(f"Skipped '{title}' {e}")
+            skipped.append(SkippedEvent(event, e.reason, e.detail))
+            continue
         if student_name is None:
             continue
         if students_to_invoice and student_name not in students_to_invoice:
@@ -184,7 +221,8 @@ def process_events(
         start = event["start"].get("dateTime")
         end = event["end"].get("dateTime")
         if not (start and end):
-            logger.warning(f"Skipping all-day event: '{title}'")
+            logger.info(f"Skipped '{title}' {SkipReason.ALL_DAY.value}")
+            skipped.append(SkippedEvent(event, SkipReason.ALL_DAY))
             continue
 
         lesson = Lesson(datetime.fromisoformat(start), datetime.fromisoformat(end))
@@ -192,4 +230,4 @@ def process_events(
 
     count = sum(len(student_lessons) for student_lessons in lessons.values())
     logger.info(f"Processed {count} lessons from {len(events)} events")
-    return lessons
+    return lessons, skipped

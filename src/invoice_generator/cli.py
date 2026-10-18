@@ -7,12 +7,20 @@ command; see `[project.scripts]` in `pyproject.toml`.
 """
 
 import argparse
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 from pathlib import Path
 from rich.console import Console
+from rich.text import Text
 
 from invoice_generator.calendar_api import authenticate, fetch_events
-from invoice_generator.event_processing import Lesson, process_events
+from invoice_generator.event_processing import (
+    Lesson,
+    SkipReason,
+    SkippedEvent,
+    process_events,
+)
+from invoice_generator.formatting import format_british_date, format_24h_time
 from invoice_generator.utils import get_last_full_month
 from invoice_generator.invoice_generator import write_invoices
 from invoice_generator.data_loader import load_student_data, load_bank_details, load_contact_details
@@ -167,6 +175,48 @@ def validate_students(
         )
 
 
+def event_time(event: dict[str, Any]) -> str:
+    """When a calendar event took place, e.g. "13/10/2026 15:00–16:00",
+    or just the date for an all-day event.
+    """
+    start, end = event["start"], event["end"]
+    if "dateTime" not in start:
+        return date.fromisoformat(start["date"]).strftime("%d/%m/%Y")
+    start_time = datetime.fromisoformat(start["dateTime"])
+    end_time = datetime.fromisoformat(end["dateTime"])
+    return (
+        f"{format_british_date(start_time)} "
+        f"{format_24h_time(start_time)}–{format_24h_time(end_time)}"
+    )
+
+
+def print_skipped_events(skipped: list[SkippedEvent]) -> None:
+    """Prints the events that may be lessons but couldn't be invoiced,
+    grouped by reason.
+
+    Args:
+        skipped: Events skipped by `process_events`
+    """
+    for reason in SkipReason:
+        events = [s for s in skipped if s.reason is reason]
+        if not events:
+            continue
+        console.print(f"\n[yellow]Skipped events {reason.value}:[/yellow]")
+        for s in events:
+            # Built as `Text` rather than a string, so neither markup nor
+            # rich's automatic highlighting applies: the date and time are
+            # one colour, and the title and detail are left as they are
+            when = event_time(s.event)
+            line = Text("  ")
+            line.append(when, style="bold cyan")
+            # Pad to the width of a timed event so the titles line up
+            line.append(" " * (24 - len(when)) + s.event.get("summary", ""))
+            if s.detail:
+                line.append(f" ({s.detail})")
+            # Long lines are left for the terminal to wrap
+            console.print(line, soft_wrap=True)
+
+
 def print_inactive_students(
     lessons: dict[str, list[Lesson]],
     student_data: dict[str, StudentInfo],
@@ -184,7 +234,7 @@ def print_inactive_students(
 
     console.print("\n[yellow]Not seen in this period:[/yellow]")
     for student in inactive:
-        console.print(f"  {student}")
+        console.print(f"  {student}", markup=False, soft_wrap=True)
         logger.info(f"{student} not seen in this period")
 
 
@@ -217,12 +267,8 @@ def main(argv: list[str] | None = None) -> None:
 
     # Match events to the students listed in `students.json`, giving each
     # student's lessons: {"Alice": [Lesson(start, end), ...], ...}
-    lessons = process_events(events, student_data, args.only)
+    lessons, skipped = process_events(events, student_data, args.only)
     console.print("[green]✓[/green] [cyan]Events fetched and processed[/cyan]")
-
-    # Inactive students are only of interest when invoicing everyone
-    if not args.only:
-        print_inactive_students(lessons, student_data)
 
     # Write invoices
     logger.info("Writing invoices...")
@@ -230,5 +276,13 @@ def main(argv: list[str] | None = None) -> None:
                               bank_details, contact_details,
                               Path(args.output_dir))
     logger.info(f"Invoices saved to: {invoices}")
-    console.print(f"\n[cyan]Invoices saved to:[/cyan] {invoices}")
-    console.print(f"[cyan]Detailed logs:[/cyan] {log_file}\n")
+    # Soft wrap keeps the paths whole, so they can be copied
+    console.print(f"\n[cyan]Invoices saved to:[/cyan] {invoices}", soft_wrap=True)
+    console.print(f"[cyan]Detailed logs:[/cyan] {log_file}", soft_wrap=True)
+
+    # Things to follow up, after the main output
+    print_skipped_events(skipped)
+    # Inactive students are only of interest when invoicing everyone
+    if not args.only:
+        print_inactive_students(lessons, student_data)
+    console.print()

@@ -5,18 +5,23 @@ This module tests the command line surface: flag parsing, student name
 validation against `students.json`, and invoice period resolution.
 """
 
+import io
 import logging
 import pytest
+from rich.console import Console
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
 from invoice_generator.cli import (
+    event_time,
     main,
     parse_args,
     print_inactive_students,
+    print_skipped_events,
     validate_students,
 )
+from invoice_generator.event_processing import SkipReason, SkippedEvent
 from invoice_generator.models import StudentInfo
 from invoice_generator.utils import get_last_full_month
 
@@ -127,6 +132,124 @@ class TestInvoicePeriod:
         assert message in error
 
 
+def calendar_event(summary, start, end):
+    """A calendar event; `start` and `end` are dateTimes, or dates for an
+    all-day event."""
+    key = "dateTime" if "T" in start else "date"
+    return {"summary": summary, "start": {key: start}, "end": {key: end}}
+
+
+class TestEventTime:
+    """Tests for event_time function."""
+
+    def test_timed_event_in_uk_time(self):
+        """Times are shown in UK time: 18:00 UTC is 19:00 in October."""
+        e = calendar_event("Tutoring Joe", "2026-10-13T18:00:00Z",
+                           "2026-10-13T19:30:00Z")
+        assert event_time(e) == "13/10/2026 19:00–20:30"
+
+    def test_all_day_event_has_date_only(self):
+        """All-day events have no times to show."""
+        e = calendar_event("Mock exams", "2026-10-18", "2026-10-19")
+        assert event_time(e) == "18/10/2026"
+
+
+class TestPrintSkippedEvents:
+    """Tests for print_skipped_events function."""
+
+    def test_groups_events_by_reason(self, capsys):
+        """Each reason gets a heading, in a fixed order, with its events
+        and any detail beneath."""
+        skipped = [
+            SkippedEvent(
+                calendar_event("Tutoring Joe", "2026-10-13T18:00:00Z",
+                               "2026-10-13T19:00:00Z"),
+                SkipReason.UNKNOWN_ATTENDEES, "joe@example.com",
+            ),
+            SkippedEvent(
+                calendar_event("Chat with Anna", "2026-10-14T09:00:00Z",
+                               "2026-10-14T09:30:00Z"),
+                SkipReason.UNEXPECTED_FORMAT,
+            ),
+            SkippedEvent(
+                calendar_event("Mark Lee's essay", "2026-10-15T09:00:00Z",
+                               "2026-10-15T10:00:00Z"),
+                SkipReason.UNEXPECTED_FORMAT,
+            ),
+        ]
+
+        print_skipped_events(skipped)
+
+        assert capsys.readouterr().out == (
+            "\n"
+            "Skipped events with an unexpected format:\n"
+            "  14/10/2026 10:00–10:30  Chat with Anna\n"
+            "  15/10/2026 10:00–11:00  Mark Lee's essay\n"
+            "\n"
+            "Skipped events whose attendees aren't in students.json:\n"
+            "  13/10/2026 19:00–20:00  Tutoring Joe (joe@example.com)\n"
+        )
+
+    def test_titles_line_up_after_all_day_events(self, capsys):
+        """All-day events are padded so their titles line up."""
+        skipped = [
+            SkippedEvent(calendar_event("Mock exams", "2026-10-18", "2026-10-19"),
+                         SkipReason.ALL_DAY),
+            SkippedEvent(calendar_event("Revision day", "2026-10-19", "2026-10-20"),
+                         SkipReason.ALL_DAY),
+        ]
+
+        print_skipped_events(skipped)
+
+        assert "  18/10/2026" + " " * 14 + "Mock exams\n" in capsys.readouterr().out
+
+    def test_date_and_time_share_a_colour(self, monkeypatch):
+        """The date and time are one colour, and the title and detail
+        aren't highlighted (rich would otherwise colour the times as if
+        they were IPv6 addresses, and any numbers in titles)."""
+        output = io.StringIO()
+        monkeypatch.setattr(
+            "invoice_generator.cli.console",
+            Console(file=output, force_terminal=True, color_system="standard"),
+        )
+        e = calendar_event("Jane Doe BAC Physics_40", "2026-10-13T18:00:00Z",
+                           "2026-10-13T19:00:00Z")
+
+        print_skipped_events([SkippedEvent(e, SkipReason.UNKNOWN_STUDENT, "Jane Doe")])
+
+        line = output.getvalue().splitlines()[-1]
+        bold_cyan = "\x1b[1;36m"
+        assert line == (
+            f"  {bold_cyan}13/10/2026 19:00–20:00\x1b[0m"
+            "  Jane Doe BAC Physics_40 (Jane Doe)"
+        )
+
+    def test_titles_are_not_read_as_markup(self, capsys):
+        """Square brackets in a title should be printed as they are."""
+        e = calendar_event("[Draft] Tutoring Joe", "2026-10-13T18:00:00Z",
+                           "2026-10-13T19:00:00Z")
+
+        print_skipped_events([SkippedEvent(e, SkipReason.UNEXPECTED_FORMAT)])
+
+        assert "[Draft] Tutoring Joe" in capsys.readouterr().out
+
+    def test_long_lines_are_not_wrapped(self, capsys):
+        """Long lines are left whole, for the terminal to wrap."""
+        e = calendar_event("Tutoring " + "Joe " * 30, "2026-10-13T18:00:00Z",
+                           "2026-10-13T19:00:00Z")
+
+        print_skipped_events([SkippedEvent(e, SkipReason.UNEXPECTED_FORMAT)])
+
+        lines = capsys.readouterr().out.strip().split("\n")
+        assert len(lines) == 2
+
+    def test_prints_nothing_when_nothing_skipped(self, capsys):
+        """No skipped events, no output."""
+        print_skipped_events([])
+
+        assert capsys.readouterr().out == ""
+
+
 class TestPrintInactiveStudents:
     """Tests for print_inactive_students function."""
 
@@ -168,14 +291,16 @@ class TestMain:
         for name in (
             "setup_logging", "validate_students", "load_student_data",
             "load_bank_details", "load_contact_details", "authenticate",
-            "fetch_events", "process_events", "print_inactive_students",
-            "write_invoices", "console",
+            "fetch_events", "process_events", "print_skipped_events",
+            "print_inactive_students", "write_invoices", "console",
         ):
             mock = MagicMock(name=name)
             monkeypatch.setattr(f"invoice_generator.cli.{name}", mock)
             mocks[name] = mock
         mocks["setup_logging"].return_value = "invoice-generator.log"
         mocks["write_invoices"].return_value = Path("invoices")
+        mocks["lessons"], mocks["skipped"] = MagicMock(), MagicMock()
+        mocks["process_events"].return_value = (mocks["lessons"], mocks["skipped"])
         return mocks
 
     def test_runs_the_pipeline_in_order(self, pipeline):
@@ -191,17 +316,37 @@ class TestMain:
         pipeline["process_events"].assert_called_once()
         assert (pipeline["process_events"].call_args.args[0]
                 is pipeline["fetch_events"].return_value)
-        assert (pipeline["write_invoices"].call_args.args[0]
-                is pipeline["process_events"].return_value)
+        assert pipeline["write_invoices"].call_args.args[0] is pipeline["lessons"]
 
     def test_reports_inactive_students_for_a_full_run(self, pipeline):
         """Without `--only`, inactive students should be reported."""
         main([])
 
         pipeline["print_inactive_students"].assert_called_once_with(
-            pipeline["process_events"].return_value,
-            pipeline["load_student_data"].return_value,
+            pipeline["lessons"], pipeline["load_student_data"].return_value
         )
+
+    def test_follow_ups_come_last(self, pipeline):
+        """Skipped events, then inactive students, should follow the
+        paths to the invoices and log."""
+        output = []
+        pipeline["console"].print.side_effect = (
+            lambda *args, **kwargs: output.append(args[0] if args else "")
+        )
+        pipeline["print_skipped_events"].side_effect = (
+            lambda skipped: output.append("<skipped events>")
+        )
+        pipeline["print_inactive_students"].side_effect = (
+            lambda lessons, student_data: output.append("<inactive students>")
+        )
+
+        main([])
+
+        pipeline["print_skipped_events"].assert_called_once_with(pipeline["skipped"])
+        logs = next(i for i, line in enumerate(output) if "Detailed logs" in line)
+        assert output[logs + 1:logs + 3] == [
+            "<skipped events>", "<inactive students>"
+        ]
 
     def test_data_dir_flag_reaches_every_loader(self, pipeline):
         """`--data-dir` should redirect all four data files."""
