@@ -18,8 +18,10 @@ logger = get_logger(__name__)
 
 # Title formats for events with no other attendees
 PMT = re.compile(r"\bPMT\b")  # paid through the agency, so not invoiced
-BLUE_EDUCATION = re.compile(r"^(\S.*?)\s+BAC\b")  # "Joe Bloggs BAC Maths"
-IN_PERSON = re.compile(r"^Tutoring\s+(\S.*)")  # "Tutoring Joe Bloggs"
+# "Joe Bloggs BAC Maths", "Joe Bloggs+BAC Maths": the name is everything
+# before "BAC", whatever separates them
+BLUE_EDUCATION = re.compile(r"^(.*?\w)\W*\bBAC\b")
+IN_PERSON = re.compile(r"^Tutoring\s+(\S.*)")  # "Tutoring Joe"
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,54 @@ def is_billable(event: dict[str, Any]) -> bool:
     return not summary.startswith(("canceled:", "cancelled:"))
 
 
+def find_student(
+    name: str,
+    student_data: dict[str, StudentInfo],
+) -> str | None:
+    """Find the student a name from an event title refers to.
+
+    The name can be a student's full name or the start of it, such as
+    their first name, so long as that picks out only one student.
+    Matching ignores case.
+
+    Args:
+        name: Name taken from an event title
+        student_data: Dictionary mapping student names to StudentInfo models
+
+    Returns:
+        The student's full name as in `students.json`, or None (with the
+        reason logged) if no student, or more than one, matches
+
+    Examples:
+        >>> students = {"Joe Bloggs": StudentInfo(client_type="private", rate=50)}
+        >>> find_student("Joe", students)
+        'Joe Bloggs'
+    """
+    words = name.casefold().split()
+    matches = [
+        student for student in student_data
+        if student.casefold().split()[:len(words)] == words
+    ]
+    # A full name wins over longer names it is the start of, so "Sam"
+    # can still be told apart from "Sam Smith"
+    exact = [student for student in matches if len(student.split()) == len(words)]
+    candidates = exact or matches
+
+    if len(candidates) == 1:
+        return candidates[0]
+    if candidates:
+        logger.warning(
+            f"'{name}' could be any of {', '.join(candidates)}. Use their "
+            f"full name in the event title. Skipping event."
+        )
+    else:
+        logger.error(
+            f"Student '{name}' not found in students.json. "
+            f"Please add their details before generating invoices."
+        )
+    return None
+
+
 def identify_student(
     event: dict[str, Any],
     student_data: dict[str, StudentInfo],
@@ -63,7 +113,7 @@ def identify_student(
     """Work out which student a calendar event is a lesson with.
 
     Events with invited attendees are matched by email address. Events
-    with no one else invited are matched by title:
+    with no one else invited are matched by title, using `find_student`:
     - "PMT ..." events are paid through the agency, so are skipped
     - Blue Education: "FirstName LastName BAC [additional info]"
     - In-person: "Tutoring StudentName"
@@ -73,14 +123,8 @@ def identify_student(
         student_data: Dictionary mapping student names to StudentInfo models
 
     Returns:
-        The student's name, or None (with the reason logged) if the
-        event is not a lesson that can be matched
-
-    Examples:
-        >>> identify_student({"summary": "Joe Bloggs BAC Maths"}, {})
-        'Joe Bloggs'
-        >>> identify_student({"summary": "Tutoring Alice"}, {})
-        'Alice'
+        The student's name as in `students.json`, or None (with the
+        reason logged) if the event is not a lesson that can be matched
     """
     title = event.get("summary", "")
     attendees = event.get("attendees", [])
@@ -101,7 +145,7 @@ def identify_student(
     if match is None:
         logger.warning(f"Skipping event with unexpected format: '{title}'")
         return None
-    return match.group(1).strip()
+    return find_student(match.group(1), student_data)
 
 
 def process_events(
@@ -134,12 +178,6 @@ def process_events(
         if student_name is None:
             continue
         if students_to_invoice and student_name not in students_to_invoice:
-            continue
-        if student_name not in student_data:
-            logger.error(
-                f"Student '{student_name}' not found in students.json. "
-                f"Please add their details before generating invoices."
-            )
             continue
 
         # All-day events have a `date` rather than a `dateTime`

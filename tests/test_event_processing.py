@@ -6,10 +6,12 @@ import logging
 import pytest
 from datetime import UTC, date, datetime, timedelta
 from invoice_generator.event_processing import (
+    find_student,
     identify_student,
     is_billable,
     process_events,
 )
+from invoice_generator.models import StudentInfo
 
 
 class TestIsBillable:
@@ -18,35 +20,35 @@ class TestIsBillable:
     def test_confirmed_event_is_billable(self):
         event = {
             "status": "confirmed",
-            "summary": "Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+            "summary": "Jane Doe BAC Bailey iG_GCSE Physics AQA_5",
         }
         assert is_billable(event) is True
 
     def test_cancelled_status_is_not_billable(self):
         event = {
             "status": "cancelled",
-            "summary": "Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+            "summary": "Jane Doe BAC Bailey iG_GCSE Physics AQA_5",
         }
         assert is_billable(event) is False
 
     def test_canceled_summary_prefix_is_not_billable(self):
         event = {
             "status": "confirmed",
-            "summary": "Canceled: Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+            "summary": "Canceled: Jane Doe BAC Bailey iG_GCSE Physics AQA_5",
         }
         assert is_billable(event) is False
 
     def test_cancelled_summary_prefix_is_not_billable(self):
         event = {
             "status": "confirmed",
-            "summary": "Cancelled: Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+            "summary": "Cancelled: Jane Doe BAC Bailey iG_GCSE Physics AQA_5",
         }
         assert is_billable(event) is False
 
     def test_both_cancelled_status_and_summary_prefix_is_not_billable(self):
         event = {
             "status": "cancelled",
-            "summary": "Cancelled: Mark Mai BAC Bailey iG_GCSE Physics AQA_5",
+            "summary": "Cancelled: Jane Doe BAC Bailey iG_GCSE Physics AQA_5",
         }
         assert is_billable(event) is False
 
@@ -68,6 +70,11 @@ class TestIsBillable:
 
 
 ME = {"email": "tutor@example.com", "self": True}
+
+
+def students(*names):
+    """A students.json listing `names`, all private clients."""
+    return {name: StudentInfo(client_type="private", rate=50.0) for name in names}
 
 
 def event(summary, *attendees):
@@ -109,7 +116,7 @@ class TestIdentifyStudent:
 
     def test_no_attendees_falls_back_to_title(self):
         """Events with no attendee list at all are matched by title."""
-        assert identify_student({"summary": "Tutoring Alice"}, {}) == "Alice"
+        assert identify_student({"summary": "Tutoring Alice"}, students("Alice")) == "Alice"
 
     def test_pmt_events_are_skipped(self, caplog):
         """PMT events are paid through the agency and so not invoiced."""
@@ -120,37 +127,89 @@ class TestIdentifyStudent:
     @pytest.mark.parametrize("title, name", [
         ("John Smith BAC", "John Smith"),
         ("Alice Jones BAC Maths", "Alice Jones"),
-        ("Mark Mai BAC Bailey iG_GCSE Physics AQA_5", "Mark Mai"),
+        ("Jane Doe BAC Bailey iG_GCSE Physics AQA_5", "Jane Doe"),
         ("Anna Maria Lopez BAC Physics", "Anna Maria Lopez"),
+        ("Lee Brown+BAC Bailey IB CS/Python_1", "Lee Brown"),
+        ("Joe Bloggs - BAC Maths", "Joe Bloggs"),
     ])
     def test_blue_education_title(self, title, name):
-        """The student's name is everything before "BAC"."""
-        assert identify_student(event(title), {}) == name
+        """The student's name is everything before "BAC", whatever
+        separates the two."""
+        assert identify_student(event(title), students(name)) == name
 
     @pytest.mark.parametrize("title, name", [
         ("Tutoring Alice", "Alice"),
         ("Tutoring Bob Smith Jones", "Bob Smith Jones"),
         ("Tutoring  Alice  ", "Alice"),
+        ("Tutoring Joe", "Joe Bloggs"),  # first name only
     ])
     def test_in_person_title(self, title, name):
         """The student's name is everything after "Tutoring"."""
-        assert identify_student(event(title), {}) == name
+        assert identify_student(event(title), students(name)) == name
 
     def test_bac_must_be_a_whole_word(self):
         """A surname starting "BAC" is not a Blue Education booking."""
-        assert identify_student(event("Tutoring Joe BACKHOUSE"), {}) == "Joe BACKHOUSE"
+        title = "Tutoring Joe BACKHOUSE"
+        assert identify_student(event(title), students("Joe BACKHOUSE")) == "Joe BACKHOUSE"
+
+    def test_title_naming_unknown_student_logs_error(self, caplog):
+        """A lesson with someone not in students.json should say who."""
+        with caplog.at_level(logging.ERROR):
+            assert identify_student(event("Tutoring Zed"), students("Alice")) is None
+        assert "Student 'Zed' not found in students.json" in caplog.text
 
     @pytest.mark.parametrize("title", [
         "Random meeting",
+        "Look at Alice's Physics IA",  # names a student, but not a lesson
         "BAC",  # no name before it
         "Tutoring",  # no name after it
         "Tutoring   ",
     ])
     def test_unrecognised_title_logs_warning(self, title, caplog):
-        """Titles that don't name a student are logged and skipped."""
+        """Titles that aren't lessons are logged and skipped."""
         with caplog.at_level(logging.WARNING):
-            assert identify_student(event(title), {}) is None
+            assert identify_student(event(title), students("Alice")) is None
         assert "unexpected format" in caplog.text
+
+
+class TestFindStudent:
+    """Tests for find_student function."""
+
+    ROSTER = students("Alice Smith", "Joe Bloggs", "Anna Lee", "Lee Brown",
+                      "Anna Maria Lopez", "Sam", "Sam Smith")
+
+    @pytest.mark.parametrize("name, student", [
+        ("Alice Smith", "Alice Smith"),  # full name
+        ("Joe", "Joe Bloggs"),  # first name
+        ("Anna Maria", "Anna Maria Lopez"),  # first and middle names
+        ("joe BLOGGS", "Joe Bloggs"),  # case is ignored
+        ("Lee", "Lee Brown"),  # not Anna Lee: names match from the start
+        ("Sam", "Sam"),  # a full name wins over "Sam Smith"
+    ])
+    def test_matches(self, name, student):
+        """A full name, or the start of one, picks out the student."""
+        assert find_student(name, self.ROSTER) == student
+
+    @pytest.mark.parametrize("name", [
+        "Al",  # part of a word
+        "Smith",  # surname alone
+        "Alice Smithson",
+        "Zed",
+    ])
+    def test_no_match_logs_error(self, name, caplog):
+        """Names that aren't the start of anyone's name don't match."""
+        with caplog.at_level(logging.ERROR):
+            assert find_student(name, self.ROSTER) is None
+        assert f"Student '{name}' not found in students.json" in caplog.text
+
+    def test_shared_first_name_is_not_guessed(self, caplog):
+        """Two students with the same first name: skip, naming both."""
+        roster = students("Alice Smith", "Alice Jones")
+
+        with caplog.at_level(logging.WARNING):
+            assert find_student("Alice", roster) is None
+
+        assert "'Alice' could be any of Alice Smith, Alice Jones" in caplog.text
 
 
 class TestProcessEvents:
