@@ -8,6 +8,7 @@ responses to avoid external dependencies.
 import pytest
 from datetime import datetime, UTC
 from unittest.mock import MagicMock, patch
+from google.auth.exceptions import RefreshError
 
 from invoice_generator.calendar_api import authenticate, fetch_events
 
@@ -31,7 +32,6 @@ class TestAuthenticate:
         token_file = tmp_path / "token.json"
         creds_file.write_text('{"installed": {}}')
         token_file.write_text('{"token": "valid_token"}')
-
 
         # Mock Credentials
         mock_creds = MagicMock()
@@ -64,29 +64,69 @@ class TestAuthenticate:
         creds_file.write_text('{"installed": {}}')
         token_file.write_text('{"token": "expired_token"}')
 
-
         # Mock expired credentials with refresh token
         mock_creds = MagicMock()
         mock_creds.valid = False
         mock_creds.expired = True
         mock_creds.refresh_token = "refresh_token_123"
         mock_creds.to_json.return_value = '{"token": "refreshed_token"}'
+        # A successful refresh makes the credentials valid again
+        mock_creds.refresh.side_effect = (
+            lambda request: setattr(mock_creds, "valid", True)
+        )
 
         mock_service = MagicMock()
 
         with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
              patch("invoice_generator.calendar_api.Request"), \
+             patch("invoice_generator.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
              patch("invoice_generator.calendar_api.build") as mock_build:
             mock_from_file.return_value = mock_creds
             mock_build.return_value = mock_service
 
             result = authenticate(creds_file, token_file)
 
-            # Should refresh the credentials
+            # Should refresh the credentials rather than sign in again
             mock_creds.refresh.assert_called_once()
+            mock_flow_create.assert_not_called()
             # Should save refreshed token
             assert token_file.read_text() == '{"token": "refreshed_token"}'
             assert result == mock_service
+
+    def test_failed_refresh_falls_back_to_oauth_flow(self, tmp_path, caplog):
+        """A revoked or lapsed refresh token should mean signing in again,
+        not a crash."""
+        creds_file = tmp_path / "credentials.json"
+        token_file = tmp_path / "token.json"
+        creds_file.write_text('{"installed": {}}')
+        token_file.write_text('{"token": "revoked_token"}')
+
+        mock_creds = MagicMock()
+        mock_creds.valid = False
+        mock_creds.expired = True
+        mock_creds.refresh_token = "revoked_refresh_token"
+        mock_creds.refresh.side_effect = RefreshError("invalid_grant")
+
+        mock_creds_new = MagicMock()
+        mock_creds_new.to_json.return_value = '{"token": "new_token"}'
+        mock_flow = MagicMock()
+        mock_flow.run_local_server.return_value = mock_creds_new
+
+        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
+             patch("invoice_generator.calendar_api.Request"), \
+             patch("invoice_generator.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
+             patch("invoice_generator.calendar_api.build") as mock_build:
+            mock_from_file.return_value = mock_creds
+            mock_flow_create.return_value = mock_flow
+
+            authenticate(creds_file, token_file)
+
+            mock_flow.run_local_server.assert_called_once_with(port=0)
+            mock_build.assert_called_once_with(
+                "calendar", "v3", credentials=mock_creds_new
+            )
+            assert token_file.read_text() == '{"token": "new_token"}'
+            assert "signing in again" in caplog.text
 
     def test_invalid_token_triggers_new_oauth_flow(
         self, tmp_path
@@ -96,7 +136,6 @@ class TestAuthenticate:
         token_file = tmp_path / "token.json"
         creds_file.write_text('{"installed": {}}')
         token_file.write_text('{"token": "invalid_token"}')
-
 
         # Mock invalid credentials (no refresh token)
         mock_creds_invalid = MagicMock()
@@ -138,7 +177,6 @@ class TestAuthenticate:
         creds_file.write_text('{"installed": {}}')
         # Don't create token_file - it should not exist
 
-
         # Mock new credentials from OAuth flow
         mock_creds = MagicMock()
         mock_creds.to_json.return_value = '{"token": "new_token"}'
@@ -171,7 +209,6 @@ class TestAuthenticate:
         token_file = tmp_path / "token.json"
         creds_file.write_text('{"installed": {}}')
         token_file.write_text('{"token": "valid_token"}')
-
 
         mock_creds = MagicMock()
         mock_creds.valid = True

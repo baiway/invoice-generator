@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build, Resource
 from datetime import datetime
@@ -37,18 +38,24 @@ def authenticate(credentials_path: Path, token_path: Path) -> Resource:
     if not credentials_path.is_file():
         raise FileNotFoundError(f"`{credentials_path.resolve()}` not found")
 
-    # Load existing credentials if available
+    # Reuse the cached token, refreshing it if it has expired. Refreshing
+    # fails if the token was revoked or has lapsed (Google expires them
+    # after 7 days for apps still in "Testing"), so sign in again then.
     creds = None
     if token_path.is_file():
         creds = Credentials.from_authorized_user_file(
             token_path, GOOGLE_CALENDAR_SCOPES
         )
+        if creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+            except RefreshError:
+                logger.warning("Could not refresh Google token; signing in again")
+                creds = None
+            else:
+                token_path.write_text(creds.to_json())
 
-    # Refresh or obtain new credentials if needed
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_path.write_text(creds.to_json())
-    elif not creds or not creds.valid:
+    if not creds or not creds.valid:
         flow = InstalledAppFlow.from_client_secrets_file(
             credentials_path, GOOGLE_CALENDAR_SCOPES
         )
