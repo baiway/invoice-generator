@@ -193,166 +193,111 @@ class TestAuthenticate:
             assert result == mock_service
 
 
+def make_service(*pages):
+    """A mock calendar service whose `events().list().execute()` returns
+    each of `pages` in turn."""
+    service = MagicMock()
+    service.events.return_value.list.return_value.execute.side_effect = pages
+    return service
+
+
+def list_calls(service):
+    """The keyword arguments of each `events().list()` call."""
+    return [c.kwargs for c in service.events.return_value.list.call_args_list]
+
+
 class TestFetchEvents:
     """Tests for fetch_events function."""
 
-    def test_fetches_events_in_date_range(self):
-        """Should fetch events between specified dates."""
-        mock_service = MagicMock()
-        mock_events = MagicMock()
-        mock_list = MagicMock()
-
-        # Set up mock chain: service.events().list().execute()
-        mock_service.events.return_value = mock_events
-        mock_events.list.return_value = mock_list
-        mock_list.execute.return_value = {"items": [
-            {"summary": "Event 1"},
-            {"summary": "Event 2"}
-        ]}
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        result = fetch_events(mock_service, start, end)
-
-        assert len(result) == 2
-        assert result[0]["summary"] == "Event 1"
-        assert result[1]["summary"] == "Event 2"
-
-    def test_date_formatting_iso8601_with_z_suffix(self):
-        """Should format dates as ISO 8601 with 'Z' suffix."""
-        mock_service = MagicMock()
-        mock_events = MagicMock()
-        mock_list = MagicMock()
-
-        mock_service.events.return_value = mock_events
-        mock_events.list.return_value = mock_list
-        mock_list.execute.return_value = {"items": []}
-
-        start = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
-        end = datetime(2024, 2, 20, 14, 45, 0, tzinfo=UTC)
-
-        fetch_events(mock_service, start, end)
-
-        # Check that list was called with ISO formatted dates + 'Z'
-        mock_events.list.assert_called_once()
-        call_kwargs = mock_events.list.call_args[1]
-        assert call_kwargs["timeMin"] == "2024-01-15T10:30:00+00:00Z"
-        assert call_kwargs["timeMax"] == "2024-02-20T14:45:00+00:00Z"
-
-    def test_uses_primary_calendar_id(self):
-        """Should use 'primary' as calendar ID."""
-        mock_service = MagicMock()
-        mock_events = MagicMock()
-        mock_list = MagicMock()
-
-        mock_service.events.return_value = mock_events
-        mock_events.list.return_value = mock_list
-        mock_list.execute.return_value = {"items": []}
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        fetch_events(mock_service, start, end)
-
-        call_kwargs = mock_events.list.call_args[1]
-        assert call_kwargs["calendarId"] == "primary"
-
-    def test_requests_single_events_ordered_by_start_time(self):
-        """Should request single events ordered by start time."""
-        mock_service = MagicMock()
-        mock_events = MagicMock()
-        mock_list = MagicMock()
-
-        mock_service.events.return_value = mock_events
-        mock_events.list.return_value = mock_list
-        mock_list.execute.return_value = {"items": []}
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        fetch_events(mock_service, start, end)
-
-        call_kwargs = mock_events.list.call_args[1]
-        assert call_kwargs["singleEvents"] is True
-        assert call_kwargs["orderBy"] == "startTime"
-
-    def test_excludes_deleted_events(self):
-        """Should pass showDeleted=False so cancellation tombstones are excluded."""
-        mock_service = MagicMock()
-        mock_events = MagicMock()
-        mock_list = MagicMock()
-
-        mock_service.events.return_value = mock_events
-        mock_events.list.return_value = mock_list
-        mock_list.execute.return_value = {"items": []}
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        fetch_events(mock_service, start, end)
-
-        call_kwargs = mock_events.list.call_args[1]
-        assert call_kwargs["showDeleted"] is False
+    START = datetime(2024, 1, 1, tzinfo=UTC)
+    END = datetime(2024, 1, 31, tzinfo=UTC)
 
     def test_returns_items_list(self):
         """Should return the items list from API response."""
-        mock_service = MagicMock()
-        mock_events = MagicMock()
-        mock_list = MagicMock()
+        items = [{"summary": "Event 1"}, {"summary": "Event 2"}]
+        service = make_service({"items": items})
 
-        expected_items = [
-            {"summary": "Meeting 1", "start": {"dateTime": "2024-01-15T10:00:00Z"}},
-            {"summary": "Meeting 2", "start": {"dateTime": "2024-01-16T14:00:00Z"}},
-            {"summary": "Meeting 3", "start": {"dateTime": "2024-01-17T09:00:00Z"}}
-        ]
-
-        mock_service.events.return_value = mock_events
-        mock_events.list.return_value = mock_list
-        mock_list.execute.return_value = {"items": expected_items}
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        result = fetch_events(mock_service, start, end)
-
-        assert result == expected_items
+        assert fetch_events(service, self.START, self.END) == items
 
     def test_empty_response_returns_empty_list(self):
-        """Should return empty list when no events found."""
-        mock_service = MagicMock()
-        mock_events = MagicMock()
-        mock_list = MagicMock()
+        """A response with no 'items' key should give an empty list."""
+        service = make_service({})
 
-        mock_service.events.return_value = mock_events
-        mock_events.list.return_value = mock_list
-        # API returns empty dict or dict without 'items' key
-        mock_list.execute.return_value = {}
+        assert fetch_events(service, self.START, self.END) == []
 
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
+    def test_follows_page_tokens(self):
+        """Events beyond the first page should be fetched too."""
+        service = make_service(
+            {"items": [{"summary": "Event 1"}], "nextPageToken": "page-2"},
+            {"items": [{"summary": "Event 2"}], "nextPageToken": "page-3"},
+            {"items": [{"summary": "Event 3"}]},
+        )
 
-        result = fetch_events(mock_service, start, end)
+        result = fetch_events(service, self.START, self.END)
 
-        assert result == []
+        assert [e["summary"] for e in result] == ["Event 1", "Event 2", "Event 3"]
+        assert [c["pageToken"] for c in list_calls(service)] == [
+            None, "page-2", "page-3"
+        ]
+
+    def test_every_page_uses_the_same_query(self):
+        """Only the page token should change between requests."""
+        service = make_service({"nextPageToken": "page-2"}, {})
+
+        fetch_events(service, self.START, self.END)
+
+        first, second = list_calls(service)
+        del first["pageToken"], second["pageToken"]
+        assert first == second
+
+    def test_dates_are_sent_with_a_utc_offset(self):
+        """The API needs RFC 3339 timestamps, which carry an offset."""
+        service = make_service({})
+        start = datetime(2024, 1, 15, 10, 30, tzinfo=UTC)
+        end = datetime(2024, 2, 20, 14, 45, tzinfo=UTC)
+
+        fetch_events(service, start, end)
+
+        (kwargs,) = list_calls(service)
+        assert datetime.fromisoformat(kwargs["timeMin"]) == start
+        assert datetime.fromisoformat(kwargs["timeMax"]) == end
+
+    def test_naive_dates_are_local_time(self):
+        """The CLI passes naive dates, which mean local midnight."""
+        service = make_service({})
+        start = datetime(2024, 7, 1)
+
+        fetch_events(service, start, datetime(2024, 7, 31))
+
+        (kwargs,) = list_calls(service)
+        sent = datetime.fromisoformat(kwargs["timeMin"])
+        assert sent.utcoffset() is not None
+        assert sent == start.astimezone()
+
+    def test_query_parameters(self):
+        """Should ask for single, non-deleted events from the primary
+        calendar, ordered by start time."""
+        service = make_service({})
+
+        fetch_events(service, self.START, self.END)
+
+        (kwargs,) = list_calls(service)
+        assert kwargs["calendarId"] == "primary"
+        assert kwargs["singleEvents"] is True
+        assert kwargs["orderBy"] == "startTime"
+        # Cancellation tombstones are excluded at source
+        assert kwargs["showDeleted"] is False
 
     def test_logs_date_range_being_fetched(self, caplog):
         """Should log the date range being fetched."""
         import logging
 
-        mock_service = MagicMock()
-        mock_events = MagicMock()
-        mock_list = MagicMock()
-
-        mock_service.events.return_value = mock_events
-        mock_events.list.return_value = mock_list
-        mock_list.execute.return_value = {"items": []}
-
+        service = make_service({})
         start = datetime(2024, 1, 15, tzinfo=UTC)
         end = datetime(2024, 2, 20, tzinfo=UTC)
 
         with caplog.at_level(logging.INFO):
-            fetch_events(mock_service, start, end)
+            fetch_events(service, start, end)
 
         assert "Fetching events from" in caplog.text
         assert "15 January 2024" in caplog.text

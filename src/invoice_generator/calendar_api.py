@@ -67,29 +67,36 @@ def fetch_events(
 
     Args:
         service: Google Calendar service object from authenticate()
-        start_date: Start of date range
-        end_date: End of date range
+        start_date: Start of date range. Naive datetimes are taken to be
+            in the local timezone.
+        end_date: End of date range, likewise
 
     Returns:
-        List of calendar events as dictionaries
+        List of calendar events as dictionaries, ordered by start time
     """
     logger.info(f"Fetching events from {start_date.strftime('%d %B %Y')} to "
                 f"{end_date.strftime('%d %B %Y')}")
     # googleapiclient builds the per-API methods (`events()` and friends)
     # onto `Resource` at runtime from the discovery document, so no type
     # checker can resolve them statically
-    events_result = (
-        cast(Any, service)
-        .events()
-        .list(
+    events_api = cast(Any, service).events()
+
+    # Results come back a page (at most 250 events) at a time
+    events: list[dict[str, Any]] = []
+    page_token = None
+    while True:
+        response = events_api.list(
             calendarId="primary",
-            timeMin=start_date.isoformat() + "Z",
-            timeMax=end_date.isoformat() + "Z",
+            # `astimezone()` gives naive datetimes the local UTC offset,
+            # which the API requires
+            timeMin=start_date.astimezone().isoformat(),
+            timeMax=end_date.astimezone().isoformat(),
             singleEvents=True,
             orderBy="startTime",
             showDeleted=False,
-        )
-        .execute()
-    )
-    events: list[dict[str, Any]] = events_result.get("items", [])
-    return events
+            pageToken=page_token,
+        ).execute()
+        events.extend(response.get("items", []))
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            return events
