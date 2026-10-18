@@ -90,7 +90,7 @@ class TestValidateInvoicePeriod:
     def test_end_without_start_raises(self):
         """`--to` alone is ambiguous and should be rejected."""
         with pytest.raises(ValueError, match="cannot be specified without"):
-            validate_invoice_period("", "2024-01-31")
+            validate_invoice_period(None, "2024-01-31")
 
     def test_explicit_range_is_parsed(self):
         """Both dates given should come back as datetimes."""
@@ -105,14 +105,14 @@ class TestValidateInvoicePeriod:
 
     def test_start_only_ends_today(self):
         """`--from` without `--to` should run up to today."""
-        start, end = validate_invoice_period("2024-01-01", "")
+        start, end = validate_invoice_period("2024-01-01", None)
         assert start == datetime(2024, 1, 1)
         assert end.date() == datetime.today().date()
 
     def test_neither_uses_last_full_month(self):
         """No dates at all should fall back to the last full month."""
         expected_start, expected_end = get_last_full_month()
-        start, end = validate_invoice_period("", "")
+        start, end = validate_invoice_period(None, None)
         assert start.strftime("%Y-%m-%d") == expected_start
         assert end.strftime("%Y-%m-%d") == expected_end
 

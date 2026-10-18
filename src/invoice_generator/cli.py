@@ -128,21 +128,26 @@ def validate_students(
         )
 
 
-def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
+def validate_invoice_period(
+    start: str | None,
+    end: str | None,
+) -> tuple[datetime, datetime]:
     """Validates the invoice period supplied via the CLI and return the
     specified dates as datetime objects. If `--to` is specified without
     `--from`, raises a ValueError. If only `--from` is provided, `--to`
     defaults to today's date. If both are empty, the function uses the
     last full month as the date range.
+
+    Args:
+        start: Value of `--from` in YYYY-MM-DD format, or None if not given
+        end: Value of `--to` in YYYY-MM-DD format, or None if not given
     """
-    if end and not start:
-        raise ValueError("`--to` cannot be specified without `--from`.")
-
-    if start and not end:
-        end = datetime.today().strftime("%Y-%m-%d")
-
-    if not start and not end:
+    if not start:
+        if end:
+            raise ValueError("`--to` cannot be specified without `--from`.")
         start, end = get_last_full_month()
+    elif not end:
+        end = datetime.today().strftime("%Y-%m-%d")
 
     try:
         start_date = datetime.strptime(start, "%Y-%m-%d")
