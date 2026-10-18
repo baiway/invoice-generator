@@ -6,13 +6,9 @@ providing runtime validation and type safety. Models store raw data
 and provide formatting methods for display purposes.
 """
 
-import re
 from collections.abc import ItemsView, KeysView, ValuesView
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, RootModel
-
-
-E164_PATTERN = re.compile(r"^\+[1-9]\d{7,14}$")
 
 
 class StudentInfo(BaseModel):
@@ -24,29 +20,6 @@ class StudentInfo(BaseModel):
         default_factory=list,
         description="Email addresses for calendar matching (can be empty for students matched by event title)"
     )
-    phone_numbers: list[str] = Field(
-        default_factory=list,
-        description="Phone numbers in E.164 format (e.g., +447xxxxxxxxx) for SMS reminders. Each entry receives the reminder independently (e.g. parent and student)."
-    )
-    nudge_opt_out: bool = Field(
-        default=False,
-        description="If True, suppress ~3h-ahead SMS nudges for this student. Used by lesson-reminders; ignored here."
-    )
-    digest_opt_out: bool = Field(
-        default=False,
-        description="If True, suppress weekly-ish SMS digests for this student. Used by lesson-reminders; ignored here."
-    )
-
-    @field_validator("phone_numbers")
-    @classmethod
-    def validate_e164_list(cls, v: list[str]) -> list[str]:
-        for entry in v:
-            if not E164_PATTERN.match(entry):
-                raise ValueError(
-                    f"phone_numbers entry {entry!r} must be in E.164 format: "
-                    + "leading '+', country code, 8-15 digits total (e.g. +447700900123)"
-                )
-        return v
 
     @property
     def formatted_rate(self) -> str:
