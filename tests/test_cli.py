@@ -5,6 +5,7 @@ This module tests the command line surface: flag parsing, student name
 validation against `students.json`, and invoice period resolution.
 """
 
+import logging
 import pytest
 from datetime import datetime
 from pathlib import Path
@@ -13,9 +14,11 @@ from unittest.mock import MagicMock
 from invoice_generator.cli import (
     main,
     parse_args,
+    print_inactive_students,
     validate_students,
     validate_invoice_period,
 )
+from invoice_generator.models import StudentInfo
 from invoice_generator.utils import get_last_full_month
 
 
@@ -122,6 +125,37 @@ class TestValidateInvoicePeriod:
         """A reversed range should be rejected."""
         with pytest.raises(ValueError, match="cannot be later than"):
             validate_invoice_period("2024-02-01", "2024-01-01")
+
+
+class TestPrintInactiveStudents:
+    """Tests for print_inactive_students function."""
+
+    def test_prints_and_logs_inactive_students_only(
+        self, sample_lessons, sample_students_data, capsys, caplog
+    ):
+        """Students not seen should be shown on screen, and only them."""
+        student_data = {
+            **sample_students_data,
+            "Charlie Brown": StudentInfo(client_type="private", rate=45.0),
+        }
+
+        with caplog.at_level(logging.INFO):
+            print_inactive_students(sample_lessons, student_data)
+
+        output = capsys.readouterr().out
+        assert "Not seen in this period" in output
+        assert "Charlie Brown" in output
+        assert "Alice Smith" not in output
+        assert "Bob Jones" not in output
+        assert "Charlie Brown not seen in this period" in caplog.text
+
+    def test_prints_nothing_when_all_students_active(
+        self, sample_lessons, sample_students_data, capsys
+    ):
+        """Should stay quiet when every student had a lesson."""
+        print_inactive_students(sample_lessons, sample_students_data)
+
+        assert capsys.readouterr().out == ""
 
 
 class TestMain:

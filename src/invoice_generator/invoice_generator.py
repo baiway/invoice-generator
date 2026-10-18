@@ -190,19 +190,3 @@ def write_invoices(
         logger.info(f"Generated combined invoice for {agency}")
 
     return output_dir.resolve()
-
-def print_inactive_students(
-    lessons: dict[str, list[Lesson]],
-    student_data: dict[str, StudentInfo]
-) -> None:
-    """Logs a list of students not seen in the provided invoice period.
-
-    This prompts the user to contact inactive students.
-
-    Args:
-        lessons: Each student seen, mapped to their lessons
-        student_data: Dictionary mapping student names to StudentInfo models
-    """
-    for student in student_data:
-        if student not in lessons:
-            logger.info(f"{student} not seen in this period")

@@ -12,9 +12,9 @@ from pathlib import Path
 from rich.console import Console
 
 from invoice_generator.calendar_api import authenticate, fetch_events
-from invoice_generator.event_processing import process_events
+from invoice_generator.event_processing import Lesson, process_events
 from invoice_generator.utils import get_last_full_month
-from invoice_generator.invoice_generator import write_invoices, print_inactive_students
+from invoice_generator.invoice_generator import write_invoices
 from invoice_generator.data_loader import load_student_data, load_bank_details, load_contact_details
 from invoice_generator.logging_config import setup_logging, get_logger
 from invoice_generator.models import StudentInfo
@@ -159,6 +159,27 @@ def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
     return start_date, end_date
 
 
+def print_inactive_students(
+    lessons: dict[str, list[Lesson]],
+    student_data: dict[str, StudentInfo],
+) -> None:
+    """Prints the students in `students.json` not seen in the invoice
+    period, as a prompt to get in touch with them.
+
+    Args:
+        lessons: Each student seen, mapped to their lessons
+        student_data: Dictionary mapping student names to StudentInfo models
+    """
+    inactive = [student for student in student_data if student not in lessons]
+    if not inactive:
+        return
+
+    console.print("\n[yellow]Not seen in this period:[/yellow]")
+    for student in inactive:
+        console.print(f"  {student}")
+        logger.info(f"{student} not seen in this period")
+
+
 def main(argv: list[str] | None = None) -> None:
     # Set up logging first - detailed logs written to file
     log_file = setup_logging()
@@ -192,9 +213,7 @@ def main(argv: list[str] | None = None) -> None:
     lessons = process_events(events, student_data, args.only)
     console.print("[green]✓[/green] [cyan]Events fetched and processed[/cyan]")
 
-    # If `--only` is not specified (user is generating invoices for all
-    # students seen in the invoice period), print a list of inactive students
-    # to prompt the user to contact them.
+    # Inactive students are only of interest when invoicing everyone
     if not args.only:
         print_inactive_students(lessons, student_data)
 

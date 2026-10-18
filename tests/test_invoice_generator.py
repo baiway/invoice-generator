@@ -14,7 +14,6 @@ from invoice_generator.invoice_generator import (
     get_invoice_period,
     extract_page_content,
     write_invoices,
-    print_inactive_students,
 )
 from invoice_generator.event_processing import Lesson
 from invoice_generator.models import StudentInfo
@@ -212,31 +211,3 @@ class TestWriteInvoices:
         assert "Generated invoice for Alice Smith" in caplog.text
         assert "Generated combined invoice for tutors4u" in caplog.text
 
-
-class TestPrintInactiveStudents:
-    """Tests for print_inactive_students function."""
-
-    def test_logs_inactive_students_only(
-        self, sample_lessons, sample_students_data, caplog
-    ):
-        """Should log students not seen, and only them."""
-        student_data = {
-            **sample_students_data,
-            "Charlie Brown": StudentInfo(client_type="private", rate=45.0),
-        }
-
-        with caplog.at_level(logging.INFO):
-            print_inactive_students(sample_lessons, student_data)
-
-        assert "Charlie Brown not seen in this period" in caplog.text
-        assert "Alice Smith not seen" not in caplog.text
-        assert "Bob Jones not seen" not in caplog.text
-
-    def test_no_logs_when_all_students_active(
-        self, sample_lessons, sample_students_data, caplog
-    ):
-        """Should not log anything when all students are active."""
-        with caplog.at_level(logging.INFO):
-            print_inactive_students(sample_lessons, sample_students_data)
-
-        assert "not seen in this period" not in caplog.text
