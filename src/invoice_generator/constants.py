@@ -23,7 +23,12 @@ TEMPLATE_DIR = "templates"
 INVOICE_TEMPLATE = "invoice.typ"
 
 OUTPUT_DIR = "invoices"
-LOG_FILE = "invoice-generator.log"
+
+# One log per run, named after when it started (e.g.
+# `logs/2026-10-18_13-24-01.log`), so names sort in time order. Relative,
+# like `OUTPUT_DIR`.
+LOG_DIR = "logs"
+LOG_FILENAME_FORMAT = "%Y-%m-%d_%H-%M-%S.log"
 
 # Google Calendar API
 GOOGLE_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]

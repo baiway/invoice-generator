@@ -140,7 +140,8 @@ invoice-generator/
 │   ├── contact_details.json
 │   ├── credentials.json
 │   └── token.json
-└── invoices/                 # Generated PDFs (git-ignored)
+├── invoices/                 # Generated PDFs (git-ignored)
+└── logs/                     # A detailed log of each run (git-ignored)
 ```
 
 ## Troubleshooting

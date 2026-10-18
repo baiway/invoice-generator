@@ -8,7 +8,8 @@ log levels, and third-party logger suppression.
 import pytest
 import logging
 import sys
-from pathlib import Path
+from datetime import datetime
+from unittest.mock import MagicMock
 
 from invoice_generator.logging_config import setup_logging, get_logger
 
@@ -38,29 +39,41 @@ class TestSetupLogging:
         root_logger.handlers[:] = original_handlers
         root_logger.setLevel(original_level)
 
-    def test_creates_log_file_at_specified_path(self, tmp_path, monkeypatch):
-        """Should create log file at the specified path."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
+    @pytest.fixture(autouse=True)
+    def log_dir(self, tmp_path, monkeypatch):
+        """Write logs to a temporary directory, not the working one."""
+        log_dir = tmp_path / "logs"
+        monkeypatch.setattr("invoice_generator.logging_config.LOG_DIR", str(log_dir))
+        return log_dir
 
-        setup_logging()
+    @staticmethod
+    def started_at(monkeypatch, *times):
+        """Make successive runs start at each of `times`."""
+        mock_datetime = MagicMock()
+        mock_datetime.now.side_effect = list(times)
+        monkeypatch.setattr("invoice_generator.logging_config.datetime", mock_datetime)
 
-        assert log_file.exists()
+    def test_creates_log_directory_and_file(self, log_dir):
+        """Should create the log directory and a log file inside it."""
+        result = setup_logging()
 
-    def test_returns_absolute_path_to_log_file(self, tmp_path, monkeypatch):
-        """Should return absolute path to log file."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
+        assert result.is_file()
+        assert result.parent == log_dir.resolve()
+
+    def test_log_is_named_after_start_time(self, log_dir, monkeypatch):
+        """The file name is when the run started, so logs sort in order."""
+        self.started_at(monkeypatch, datetime(2026, 10, 18, 13, 24, 1))
 
         result = setup_logging()
 
-        assert Path(result).is_absolute()
-        assert str(log_file.resolve()) == result
+        assert result == (log_dir / "2026-10-18_13-24-01.log").resolve()
 
-    def test_file_handler_uses_info_level_by_default(self, tmp_path, monkeypatch):
+    def test_returns_absolute_path_to_log_file(self):
+        """Should return absolute path to log file."""
+        assert setup_logging().is_absolute()
+
+    def test_file_handler_uses_info_level_by_default(self):
         """File handler should use INFO level by default."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 
@@ -76,10 +89,8 @@ class TestSetupLogging:
         assert file_handler is not None
         assert file_handler.level == logging.INFO
 
-    def test_console_handler_uses_warning_level(self, tmp_path, monkeypatch):
+    def test_console_handler_uses_warning_level(self):
         """Console handler should use WARNING level."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 
@@ -99,10 +110,8 @@ class TestSetupLogging:
         assert console_handler is not None
         assert console_handler.level == logging.WARNING
 
-    def test_accepts_custom_logging_level(self, tmp_path, monkeypatch):
+    def test_accepts_custom_logging_level(self):
         """Should accept custom logging level."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 
@@ -121,10 +130,8 @@ class TestSetupLogging:
         assert file_handler is not None
         assert file_handler.level == logging.DEBUG
 
-    def test_suppresses_third_party_loggers(self, tmp_path, monkeypatch):
+    def test_suppresses_third_party_loggers(self):
         """Should suppress verbose third-party loggers."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         setup_logging()
 
@@ -133,35 +140,36 @@ class TestSetupLogging:
         assert logging.getLogger("googleapiclient").level == logging.WARNING
         assert logging.getLogger("google.auth").level == logging.WARNING
 
-    def test_file_handler_mode_overwrites(self, tmp_path, monkeypatch):
-        """File handler should use mode='w' to overwrite existing logs."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
+    def test_each_run_gets_its_own_log(self, log_dir, monkeypatch):
+        """Later runs should leave earlier logs alone."""
+        self.started_at(monkeypatch, datetime(2026, 9, 1, 9, 0, 0),
+                        datetime(2026, 10, 1, 9, 0, 0))
 
-        # Create existing log file with content
-        log_file.write_text("Old log content\n")
+        first = setup_logging()
+        second = setup_logging()
 
-        root_logger = logging.getLogger()
+        assert first != second
+        assert sorted(path.name for path in log_dir.iterdir()) == [
+            "2026-09-01_09-00-00.log", "2026-10-01_09-00-00.log"
+        ]
 
-        setup_logging()
+    def test_run_in_the_same_second_appends(self, log_dir, monkeypatch):
+        """Two runs starting in the same second share a file, so the
+        second must add to it rather than overwrite it."""
+        log_dir.mkdir()
+        (log_dir / "2026-10-18_13-24-01.log").write_text("Earlier run\n")
+        self.started_at(monkeypatch, datetime(2026, 10, 18, 13, 24, 1))
 
-        # Write a log message
-        test_logger = logging.getLogger("test")
-        test_logger.info("New log message")
+        log_file = setup_logging()
+        logging.getLogger("test").info("Later run")
+        for handler in logging.getLogger().handlers:
+            handler.flush()
 
-        # Close handlers to flush
-        for handler in root_logger.handlers:
-            handler.close()
+        assert log_file.read_text().startswith("Earlier run\n")
+        assert "Later run" in log_file.read_text()
 
-        # Log file should not contain old content
-        log_content = log_file.read_text()
-        assert "Old log content" not in log_content
-        assert "New log message" in log_content
-
-    def test_log_formatters_include_timestamp_and_level(self, tmp_path, monkeypatch):
+    def test_log_formatters_include_timestamp_and_level(self):
         """Log formatters should include timestamp, name, level, and message."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         root_logger = logging.getLogger()
 
@@ -185,10 +193,8 @@ class TestSetupLogging:
         assert "message" in fmt_str
 
 
-    def test_console_shows_level_and_message_only(self, tmp_path, monkeypatch):
+    def test_console_shows_level_and_message_only(self):
         """Console lines should be short: the detail is in the log file."""
-        log_file = tmp_path / "test.log"
-        monkeypatch.setattr("invoice_generator.logging_config.LOG_FILE", str(log_file))
 
         setup_logging()
 

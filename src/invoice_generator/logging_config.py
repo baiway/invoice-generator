@@ -7,24 +7,26 @@ Detailed logs are written to a file, while console output is kept minimal.
 
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
-from invoice_generator.constants import LOG_FILE
+from invoice_generator.constants import LOG_DIR, LOG_FILENAME_FORMAT
 
 
-def setup_logging(level: int = logging.INFO) -> str:
+def setup_logging(level: int = logging.INFO) -> Path:
     """
     Configure logging for the application.
 
-    Logs are written to a file with full detail, while console output
-    is kept minimal (WARNING and above only) to avoid cluttering the
-    progress bars.
+    Logs are written with full detail to a new file in `LOG_DIR`, named
+    after the time the run started, while console output is kept
+    minimal (WARNING and above only) to avoid cluttering the progress
+    bars.
 
     Args:
         level: Logging level for file output (default: INFO)
 
     Returns:
-        Path to the log file where detailed logs are written
+        Absolute path to the log file where detailed logs are written
     """
     # Create formatters
     detailed_formatter = logging.Formatter(
@@ -32,7 +34,10 @@ def setup_logging(level: int = logging.INFO) -> str:
     )
 
     # File handler - logs everything at INFO level and above
-    file_handler = logging.FileHandler(LOG_FILE, mode='w')
+    log_dir = Path(LOG_DIR)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / datetime.now().strftime(LOG_FILENAME_FORMAT)
+    file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(level)
     file_handler.setFormatter(detailed_formatter)
 
@@ -54,7 +59,7 @@ def setup_logging(level: int = logging.INFO) -> str:
     logging.getLogger("googleapiclient").setLevel(logging.WARNING)
     logging.getLogger("google.auth").setLevel(logging.WARNING)
 
-    return str(Path(LOG_FILE).resolve())
+    return log_file.resolve()
 
 
 def get_logger(name: str) -> logging.Logger:

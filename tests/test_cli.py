@@ -297,7 +297,7 @@ class TestMain:
             mock = MagicMock(name=name)
             monkeypatch.setattr(f"invoice_generator.cli.{name}", mock)
             mocks[name] = mock
-        mocks["setup_logging"].return_value = "invoice-generator.log"
+        mocks["setup_logging"].return_value = Path("logs/2026-10-18_13-24-01.log")
         mocks["write_invoices"].return_value = Path("invoices")
         mocks["lessons"], mocks["skipped"] = MagicMock(), MagicMock()
         mocks["process_events"].return_value = (mocks["lessons"], mocks["skipped"])
