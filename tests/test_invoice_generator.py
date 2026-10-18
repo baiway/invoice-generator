@@ -6,8 +6,9 @@ calculations, and formatting. PDFs are actually generated to verify
 the full rendering pipeline works correctly.
 """
 
-import pandas as pd
-from datetime import datetime, UTC
+import logging
+import pytest
+from datetime import datetime, timedelta, UTC
 
 from invoice_generator.invoice_generator import (
     get_invoice_period,
@@ -15,6 +16,7 @@ from invoice_generator.invoice_generator import (
     write_invoices,
     print_inactive_students,
 )
+from invoice_generator.event_processing import Lesson
 from invoice_generator.models import StudentInfo
 
 
@@ -109,384 +111,132 @@ class TestExtractPageContent:
         assert "Footer content" not in result  # Outside container
 
 
+def lesson(day, hour, minutes=60):
+    """A lesson on `day` January 2024, starting at `hour` UTC."""
+    start = datetime(2024, 1, day, hour, tzinfo=UTC)
+    return Lesson(start, start + timedelta(minutes=minutes))
+
+
+@pytest.fixture
+def write(tmp_path, sample_bank_details_model, sample_contact_details_model):
+    """Call write_invoices for January 2024 with the sample details,
+    writing to `tmp_path / "invoices"`."""
+    def _write(lessons, student_data):
+        return write_invoices(
+            lessons,
+            student_data,
+            datetime(2024, 1, 1),
+            datetime(2024, 1, 31, 23, 59, 59),
+            sample_bank_details_model,
+            sample_contact_details_model,
+            tmp_path / "invoices",
+        )
+    return _write
+
+
+def pdfs(directory):
+    """Names of the PDFs in `directory`."""
+    return sorted(path.name for path in directory.glob("*.pdf"))
+
+
 class TestWriteInvoices:
     """Tests for write_invoices function."""
 
-    def test_creates_output_directory_if_not_exists(
-        self, tmp_path, sample_lessons_dataframe,
-        sample_bank_details_model, sample_contact_details_model
+    def test_creates_output_directory_and_returns_its_path(
+        self, tmp_path, write, sample_lessons, sample_students_data
     ):
-        """Should create output directory if it doesn't exist."""
-        output_dir = tmp_path / "new_output"
-        assert not output_dir.exists()
+        """Should create the output directory and return its absolute path."""
+        result = write(sample_lessons, sample_students_data)
 
+        assert result == (tmp_path / "invoices").resolve()
+        assert result.is_dir()
 
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
+    def test_private_client_gets_their_own_pdf(self, tmp_path, write):
+        """Private clients get one PDF each, named after them."""
+        student_data = {
+            "Alice Mary Smith": StudentInfo(client_type="private", rate=50.0)
+        }
 
-        write_invoices(
-            sample_lessons_dataframe,
-            start,
-            end,
-            sample_bank_details_model,
-            sample_contact_details_model,
-            output_dir
+        write({"Alice Mary Smith": [lesson(15, 10)]}, student_data)
+
+        assert pdfs(tmp_path / "invoices") == ["alice-mary-smith-invoice.pdf"]
+
+    def test_agency_students_share_one_pdf(self, tmp_path, write):
+        """Students from one agency are combined into the agency's PDF."""
+        student_data = {
+            "Student A": StudentInfo(client_type="tutors4u", rate=40.0),
+            "Student B": StudentInfo(client_type="tutors4u", rate=40.0),
+            "Student C": StudentInfo(client_type="private", rate=50.0),
+        }
+        lessons = {
+            "Student A": [lesson(15, 10), lesson(16, 10)],
+            "Student B": [lesson(17, 10)],
+            "Student C": [lesson(18, 10)],
+        }
+
+        write(lessons, student_data)
+
+        assert pdfs(tmp_path / "invoices") == [
+            "student-c-invoice.pdf", "tutors4u-invoice.pdf"
+        ]
+
+    def test_amount_owed_is_hours_times_rate(self, write, monkeypatch):
+        """1 hour + 1.5 hours at £50/hour should come to £125."""
+        rendered = []
+
+        class CapturingHTML:
+            def __init__(self, string):
+                rendered.append(string)
+
+            def write_pdf(self, path, stylesheets=None):
+                pass
+
+        monkeypatch.setattr(
+            "invoice_generator.invoice_generator.HTML", CapturingHTML
         )
+        student_data = {"Alice": StudentInfo(client_type="private", rate=50.0)}
 
-        assert output_dir.exists()
-        assert output_dir.is_dir()
+        write({"Alice": [lesson(15, 10), lesson(16, 10, 90)]}, student_data)
 
-    def test_generates_pdf_for_private_client(
-        self, tmp_path, sample_bank_details_model,
-        sample_contact_details_model
+        (html,) = rendered
+        assert "2 hours 30 mins" in html
+        assert "£125.00" in html
+
+    def test_logs_each_pdf(
+        self, write, sample_lessons, sample_students_data, caplog
     ):
-        """Should generate PDF file for private client."""
-        output_dir = tmp_path / "invoices"
-
-        # Create lessons DataFrame with private client
-        lessons = pd.DataFrame({
-            "student": ["Alice Smith"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
-            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=UTC)],
-            "rate": [50.0],
-            "client_type": ["private"]
-        })
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        write_invoices(
-            lessons,
-            start,
-            end,
-            sample_bank_details_model,
-            sample_contact_details_model,
-            output_dir
-        )
-
-        pdf_file = output_dir / "alice-smith-invoice.pdf"
-        assert pdf_file.exists()
-        assert pdf_file.stat().st_size > 0
-
-    def test_private_client_filename_format(
-        self, tmp_path, sample_bank_details_model,
-        sample_contact_details_model
-    ):
-        """Private client PDFs should use lowercase-hyphenated filenames."""
-        output_dir = tmp_path / "invoices"
-
-        lessons = pd.DataFrame({
-            "student": ["Alice Mary Smith"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
-            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=UTC)],
-            "rate": [50.0],
-            "client_type": ["private"]
-        })
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        write_invoices(
-            lessons,
-            start,
-            end,
-            sample_bank_details_model,
-            sample_contact_details_model,
-            output_dir
-        )
-
-        # Check filename is lowercase with hyphens
-        pdf_file = output_dir / "alice-mary-smith-invoice.pdf"
-        assert pdf_file.exists()
-
-    def test_generates_combined_pdf_for_agency(
-        self, tmp_path, sample_bank_details_model,
-        sample_contact_details_model
-    ):
-        """Should generate combined PDF for agency clients."""
-        output_dir = tmp_path / "invoices"
-
-        lessons = pd.DataFrame({
-            "student": ["Bob Jones"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
-            "end": [datetime(2024, 1, 15, 11, 30, tzinfo=UTC)],
-            "rate": [40.0],
-            "client_type": ["tutors4u"]
-        })
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        write_invoices(
-            lessons,
-            start,
-            end,
-            sample_bank_details_model,
-            sample_contact_details_model,
-            output_dir
-        )
-
-        pdf_file = output_dir / "tutors4u-invoice.pdf"
-        assert pdf_file.exists()
-        assert pdf_file.stat().st_size > 0
-
-    def test_agency_pdf_contains_multiple_students(
-        self, tmp_path, sample_bank_details_model,
-        sample_contact_details_model
-    ):
-        """Agency PDF should combine multiple students in one file."""
-        output_dir = tmp_path / "invoices"
-
-        # Two students from same agency
-        lessons = pd.DataFrame({
-            "student": ["Student A", "Student A", "Student B"],
-            "start": [
-                datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
-                datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
-                datetime(2024, 1, 17, 10, 0, tzinfo=UTC)
-            ],
-            "end": [
-                datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
-                datetime(2024, 1, 16, 11, 0, tzinfo=UTC),
-                datetime(2024, 1, 17, 11, 0, tzinfo=UTC)
-            ],
-            "rate": [40.0, 40.0, 40.0],
-            "client_type": ["tutors4u", "tutors4u", "tutors4u"]
-        })
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        write_invoices(
-            lessons,
-            start,
-            end,
-            sample_bank_details_model,
-            sample_contact_details_model,
-            output_dir
-        )
-
-        # Should have one combined PDF, not separate PDFs
-        pdf_file = output_dir / "tutors4u-invoice.pdf"
-        assert pdf_file.exists()
-        # Should be larger than single student PDF (contains both)
-        assert pdf_file.stat().st_size > 1000
-
-    def test_calculates_total_hours_correctly(
-        self, tmp_path, monkeypatch, sample_bank_details_model,
-        sample_contact_details_model
-    ):
-        """Should correctly sum session durations (1h + 1.5h = 2.5h)."""
-        output_dir = tmp_path / "invoices"
-
-        lessons = pd.DataFrame({
-            "student": ["Test Student", "Test Student"],
-            "start": [
-                datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
-                datetime(2024, 1, 16, 10, 0, tzinfo=UTC)
-            ],
-            "end": [
-                datetime(2024, 1, 15, 11, 0, tzinfo=UTC),  # 1 hour
-                datetime(2024, 1, 16, 11, 30, tzinfo=UTC)  # 1.5 hours
-            ],
-            "rate": [50.0, 50.0],
-            "client_type": ["private", "private"]
-        })
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        rendered_html_capture = []
-
-        def capture_html(string):
-            class MockHTML:
-                def __init__(self, string):
-                    rendered_html_capture.append(string)
-                def write_pdf(self, path, stylesheets=None):
-                    pass
-            return MockHTML(string)
-
-        monkeypatch.setattr("invoice_generator.invoice_generator.HTML", capture_html)
-
-        write_invoices(
-            lessons,
-            start,
-            end,
-            sample_bank_details_model,
-            sample_contact_details_model,
-            output_dir
-        )
-
-        # Total charge: 2.5h * £50/h = £125
-        html = rendered_html_capture[0]
-        # The HTML should contain the calculated charge somewhere
-        assert "125" in html  # Total charge should be present
-
-    def test_returns_absolute_path_to_output_directory(
-        self, tmp_path, sample_lessons_dataframe,
-        sample_bank_details_model, sample_contact_details_model
-    ):
-        """Should return absolute path to output directory."""
-        output_dir = tmp_path / "invoices"
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        result = write_invoices(
-            sample_lessons_dataframe,
-            start,
-            end,
-            sample_bank_details_model,
-            sample_contact_details_model,
-            output_dir
-        )
-
-        assert result.is_absolute()
-        assert result == output_dir.resolve()
-
-    def test_logs_invoice_generation_for_private_clients(
-        self, tmp_path, sample_bank_details_model,
-        sample_contact_details_model, caplog
-    ):
-        """Should log invoice generation for private clients."""
-        import logging
-
-        output_dir = tmp_path / "invoices"
-
-        lessons = pd.DataFrame({
-            "student": ["Alice Smith"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
-            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=UTC)],
-            "rate": [50.0],
-            "client_type": ["private"]
-        })
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
+        """Should log each private and agency invoice written."""
         with caplog.at_level(logging.INFO):
-            write_invoices(
-                lessons,
-                start,
-                end,
-                sample_bank_details_model,
-                sample_contact_details_model,
-                output_dir
-            )
+            write(sample_lessons, sample_students_data)
 
         assert "Generated invoice for Alice Smith" in caplog.text
-
-    def test_logs_combined_invoice_for_agencies(
-        self, tmp_path, sample_bank_details_model,
-        sample_contact_details_model, caplog
-    ):
-        """Should log combined invoice generation for agencies."""
-        import logging
-
-        output_dir = tmp_path / "invoices"
-
-        lessons = pd.DataFrame({
-            "student": ["Bob Jones"],
-            "start": [datetime(2024, 1, 15, 10, 0, tzinfo=UTC)],
-            "end": [datetime(2024, 1, 15, 11, 0, tzinfo=UTC)],
-            "rate": [40.0],
-            "client_type": ["tutors4u"]
-        })
-
-        start = datetime(2024, 1, 1, tzinfo=UTC)
-        end = datetime(2024, 1, 31, tzinfo=UTC)
-
-        with caplog.at_level(logging.INFO):
-            write_invoices(
-                lessons,
-                start,
-                end,
-                sample_bank_details_model,
-                sample_contact_details_model,
-                output_dir
-            )
-
         assert "Generated combined invoice for tutors4u" in caplog.text
 
 
 class TestPrintInactiveStudents:
     """Tests for print_inactive_students function."""
 
-    def test_logs_inactive_students_not_in_lessons(
-        self, sample_lessons_dataframe, caplog
+    def test_logs_inactive_students_only(
+        self, sample_lessons, sample_students_data, caplog
     ):
-        """Should log students not seen in lesson data."""
-        import logging
-
+        """Should log students not seen, and only them."""
         student_data = {
-            "Alice Smith": StudentInfo(
-                client_type="private",
-                rate=50.0,
-                emails=["alice@example.com"]
-            ),
-            "Bob Jones": StudentInfo(
-                client_type="tutors4u",
-                rate=40.0,
-                emails=["bob@example.com"]
-            ),
-            "Charlie Brown": StudentInfo(
-                client_type="private",
-                rate=45.0,
-                emails=["charlie@example.com"]
-            )
+            **sample_students_data,
+            "Charlie Brown": StudentInfo(client_type="private", rate=45.0),
         }
 
-        # sample_lessons_dataframe only has Alice and Bob
         with caplog.at_level(logging.INFO):
-            print_inactive_students(sample_lessons_dataframe, student_data)
+            print_inactive_students(sample_lessons, student_data)
 
         assert "Charlie Brown not seen in this period" in caplog.text
-
-    def test_no_log_for_active_students(self, sample_lessons_dataframe, caplog):
-        """Should not log students who appear in lessons."""
-        import logging
-
-        student_data = {
-            "Alice Smith": StudentInfo(
-                client_type="private",
-                rate=50.0,
-                emails=["alice@example.com"]
-            ),
-            "Bob Jones": StudentInfo(
-                client_type="tutors4u",
-                rate=40.0,
-                emails=["bob@example.com"]
-            )
-        }
-
-        with caplog.at_level(logging.INFO):
-            print_inactive_students(sample_lessons_dataframe, student_data)
-
-        # Alice and Bob are in lessons, should not be logged as inactive
         assert "Alice Smith not seen" not in caplog.text
         assert "Bob Jones not seen" not in caplog.text
 
     def test_no_logs_when_all_students_active(
-        self, sample_lessons_dataframe, caplog
+        self, sample_lessons, sample_students_data, caplog
     ):
         """Should not log anything when all students are active."""
-        import logging
-
-        # Only students who are in the lessons DataFrame
-        student_data = {
-            "Alice Smith": StudentInfo(
-                client_type="private",
-                rate=50.0,
-                emails=["alice@example.com"]
-            ),
-            "Bob Jones": StudentInfo(
-                client_type="tutors4u",
-                rate=40.0,
-                emails=["bob@example.com"]
-            )
-        }
-
         with caplog.at_level(logging.INFO):
-            print_inactive_students(sample_lessons_dataframe, student_data)
+            print_inactive_students(sample_lessons, sample_students_data)
 
         assert "not seen in this period" not in caplog.text

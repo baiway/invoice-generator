@@ -1,19 +1,25 @@
+"""
+Display formatting for invoices: dates, times, durations and currency.
+
+Dates and times are shown in UK time, whatever timezone they arrive in.
+"""
+
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+UK_TIMEZONE = ZoneInfo("Europe/London")
+
 
 def format_british_date(dt: datetime) -> str:
-    """Converts datetime object into a string in DD/MM/YYYY format."""
-    return dt.strftime("%d/%m/%Y")
+    """Converts datetime object into a string in DD/MM/YYYY format in UK
+    timezone."""
+    return dt.astimezone(UK_TIMEZONE).strftime("%d/%m/%Y")
 
 
 def format_24h_time(dt: datetime) -> str:
     """Converts datetime object into a 24-hour time string (e.g. "15:00")
     in UK timezone."""
-    tz = ZoneInfo("Europe/London")
-    local_time = dt.astimezone(tz)
-
-    return local_time.strftime("%H:%M")
+    return dt.astimezone(UK_TIMEZONE).strftime("%H:%M")
 
 
 def format_hours_minutes(dt: timedelta) -> str:

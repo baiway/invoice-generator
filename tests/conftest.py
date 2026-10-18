@@ -3,8 +3,9 @@ Pytest configuration and shared fixtures.
 """
 
 import pytest
+from datetime import datetime, UTC
+from invoice_generator.event_processing import Lesson
 from invoice_generator.models import StudentInfo
-from datetime import UTC
 
 
 @pytest.fixture
@@ -96,25 +97,17 @@ def sample_contact_details_model():
 
 
 @pytest.fixture
-def sample_lessons_dataframe():
-    """Sample lessons DataFrame for invoice generation."""
-    import pandas as pd
-    from datetime import datetime
-
-    data = {
-        "student": ["Alice Smith", "Alice Smith", "Bob Jones"],
-        "start": [
-            datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
-            datetime(2024, 1, 17, 14, 0, tzinfo=UTC),
-            datetime(2024, 1, 16, 10, 0, tzinfo=UTC)
+def sample_lessons() -> dict[str, list[Lesson]]:
+    """Lessons for Alice (private, 2.5 hours) and Bob (tutors4u, 1.5 hours)."""
+    return {
+        "Alice Smith": [
+            Lesson(datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                   datetime(2024, 1, 15, 11, 0, tzinfo=UTC)),
+            Lesson(datetime(2024, 1, 17, 14, 0, tzinfo=UTC),
+                   datetime(2024, 1, 17, 15, 30, tzinfo=UTC)),
         ],
-        "end": [
-            datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
-            datetime(2024, 1, 17, 15, 30, tzinfo=UTC),
-            datetime(2024, 1, 16, 11, 30, tzinfo=UTC)
+        "Bob Jones": [
+            Lesson(datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                   datetime(2024, 1, 16, 11, 30, tzinfo=UTC)),
         ],
-        "rate": [50.0, 50.0, 40.0],
-        "client_type": ["private", "private", "tutors4u"]
     }
-
-    return pd.DataFrame(data)

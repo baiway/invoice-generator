@@ -9,17 +9,17 @@
     <div class="lesson-details">
       <h2>Sessions</h2>
       <table class="sessions">
-        {% for start, end, length in timings %}
+        {% for lesson in lessons %}
         <tr>
-          <td>{{ start | british_date }}</td>
-          <td>{{ start | time_24h }} until {{ end | time_24h }} ({{ length | hours_minutes }})</td>
+          <td>{{ lesson.start | british_date }}</td>
+          <td>{{ lesson.start | time_24h }} until {{ lesson.end | time_24h }} ({{ lesson.duration | hours_minutes }})</td>
         </tr>
         {% endfor %}
       </table>
       <table class="aggregates">
         <tr>
           <td>Total time</td>
-          <td>{{ total_hours | hours_minutes }}</td>
+          <td>{{ total_time | hours_minutes }}</td>
         </tr>
         <tr>
           <td>Rate</td>

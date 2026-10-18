@@ -5,12 +5,10 @@ This module handles generating HTML invoices from lesson data and
 rendering them as PDFs using WeasyPrint.
 """
 
-import pandas as pd
 import calendar
-from datetime import datetime
+from datetime import datetime, timedelta
 from importlib import resources
 from pathlib import Path
-from typing import cast
 from jinja2 import Environment, PackageLoader, select_autoescape
 from bs4 import BeautifulSoup
 from rich.progress import track
@@ -28,6 +26,7 @@ from invoice_generator.constants import (
     TEMPLATE_DIR,
     TEMPLATE_PACKAGE,
 )
+from invoice_generator.event_processing import Lesson
 from invoice_generator.models import BankDetails, ContactDetails, StudentInfo
 from invoice_generator.logging_config import get_logger
 from invoice_generator.weasyprint_libs import configure_library_path
@@ -73,7 +72,8 @@ def extract_page_content(rendered_html: str) -> str:
 
 
 def write_invoices(
-    lessons: pd.DataFrame,
+    lessons: dict[str, list[Lesson]],
+    student_data: dict[str, StudentInfo],
     start_date: datetime,
     end_date: datetime,
     bank_details: BankDetails,
@@ -83,7 +83,8 @@ def write_invoices(
     """Generates and writes invoice as PDFs for specified students over the invoice period.
 
     Args:
-        lessons: DataFrame containing lesson information
+        lessons: Each student to invoice, mapped to their lessons
+        student_data: Dictionary mapping student names to StudentInfo models
         start_date: Start of invoice period
         end_date: End of invoice period
         bank_details: BankDetails model with payment information
@@ -119,36 +120,25 @@ def write_invoices(
     # the agency names
     agency_html: dict[str, list[str]] = {}
 
-    grouped_lessons = lessons.groupby("student")
-
     # Generate invoices for each student with progress bar
-    for student, lesson_info in track(
-        grouped_lessons,
+    for student, student_lessons in track(
+        sorted(lessons.items()),
         description="[cyan]Generating invoices",
         console=console,
         transient=True
     ):
-        # Get start and end times for each session
-        start_times = lesson_info["start"]
-        end_times = lesson_info["end"]
-
-        # Calculate amount owed. pandas-stubs types `Series.sum()` as
-        # `float` whatever the dtype; for a timedelta Series it is a
-        # `Timedelta`, which the template filter and the division below
-        # both rely on
-        session_lengths = end_times - start_times
-        total_hours = cast(pd.Timedelta, session_lengths.sum())
-        rate = lesson_info["rate"].iloc[0]
-        client_type = lesson_info["client_type"].iloc[0]
-        total_charge = (total_hours / pd.Timedelta(hours=1)) * rate
+        info = student_data[student]
+        client_type = info.client_type
+        total_time = sum((lesson.duration for lesson in student_lessons), timedelta())
+        total_charge = total_time / timedelta(hours=1) * info.rate
 
         # Substitute lesson information into template HTML
         rendered_html = template.render(
             student=student,
             invoice_period=invoice_period,
-            timings=zip(start_times, end_times, session_lengths, strict=True),
-            total_hours=total_hours,
-            rate=rate,
+            lessons=student_lessons,
+            total_time=total_time,
+            rate=info.rate,
             total_charge=total_charge,
             name=bank_details.name,
             sort_code=bank_details.formatted_sort_code,
@@ -162,7 +152,7 @@ def write_invoices(
         # lessons to form a combined PDF later.
         if client_type == "private":
             html = HTML(string=rendered_html)
-            filename = f"{str(student).lower()}-invoice.pdf".replace(" ", "-")
+            filename = f"{student.lower()}-invoice.pdf".replace(" ", "-")
             html.write_pdf(output_dir / filename, stylesheets=[css])
             logger.info(f"Generated invoice for {student}")
         else:
@@ -202,7 +192,7 @@ def write_invoices(
     return output_dir.resolve()
 
 def print_inactive_students(
-    lessons: pd.DataFrame,
+    lessons: dict[str, list[Lesson]],
     student_data: dict[str, StudentInfo]
 ) -> None:
     """Logs a list of students not seen in the provided invoice period.
@@ -210,11 +200,9 @@ def print_inactive_students(
     This prompts the user to contact inactive students.
 
     Args:
-        lessons: DataFrame containing lesson information
+        lessons: Each student seen, mapped to their lessons
         student_data: Dictionary mapping student names to StudentInfo models
     """
-    students_seen = lessons["student"].unique()
-
     for student in student_data:
-        if student not in students_seen:
+        if student not in lessons:
             logger.info(f"{student} not seen in this period")

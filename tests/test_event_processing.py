@@ -4,7 +4,7 @@ Tests for src/invoice_generator/event_processing.py event classification logic.
 
 import logging
 import pytest
-import pandas as pd
+from datetime import UTC, date, datetime, timedelta
 from invoice_generator.event_processing import (
     identify_student,
     is_billable,
@@ -173,15 +173,14 @@ class TestProcessEvents:
             }
         ]
 
-        df = process_events(
+        lessons = process_events(
             events,
             sample_students_data,
             []
         )
 
-        assert len(df) == 1
-        assert df.iloc[0]["student"] == "Alice Smith"
-        assert df.iloc[0]["rate"] == 50.0
+        assert list(lessons) == ["Alice Smith"]
+        assert len(lessons["Alice Smith"]) == 1
 
     def test_process_blue_education_events(
         self, comprehensive_students_data
@@ -197,15 +196,13 @@ class TestProcessEvents:
             }
         ]
 
-        df = process_events(
+        lessons = process_events(
             events,
             comprehensive_students_data,
             []
         )
 
-        assert len(df) == 1
-        assert df.iloc[0]["student"] == "Charlie Brown"
-        assert df.iloc[0]["client_type"] == "blue_education"
+        assert list(lessons) == ["Charlie Brown"]
 
     def test_process_in_person_events(
         self, sample_students_data
@@ -221,14 +218,13 @@ class TestProcessEvents:
             }
         ]
 
-        df = process_events(
+        lessons = process_events(
             events,
             sample_students_data,
             []
         )
 
-        assert len(df) == 1
-        assert df.iloc[0]["student"] == "Alice Smith"
+        assert list(lessons) == ["Alice Smith"]
 
     def test_skip_pmt_events(
         self, sample_students_data, caplog
@@ -245,13 +241,13 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.DEBUG):
-            df = process_events(
+            lessons = process_events(
                 events,
                 sample_students_data,
                 []
             )
 
-        assert len(df) == 0
+        assert lessons == {}
         assert "Skipping PMT event" in caplog.text
 
     def test_skip_unknown_format_events(
@@ -269,13 +265,13 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.WARNING):
-            df = process_events(
+            lessons = process_events(
                 events,
                 sample_students_data,
                 []
             )
 
-        assert len(df) == 0
+        assert lessons == {}
         assert "Skipping event with unexpected format" in caplog.text
         assert "Doctor appointment" in caplog.text
 
@@ -294,13 +290,13 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.DEBUG):
-            df = process_events(
+            lessons = process_events(
                 events,
                 sample_students_data,
                 []
             )
 
-        assert len(df) == 0
+        assert lessons == {}
         assert "Skipping event with no title" in caplog.text
 
     def test_skip_events_with_unknown_attendees(
@@ -322,13 +318,13 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.WARNING):
-            df = process_events(
+            lessons = process_events(
                 events,
                 sample_students_data,
                 []
             )
 
-        assert len(df) == 0
+        assert lessons == {}
         assert "Attendees not found in students.json" in caplog.text
 
     def test_skip_all_day_events(self, sample_students_data, caplog):
@@ -342,9 +338,9 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.WARNING):
-            df = process_events(events, sample_students_data, [])
+            lessons = process_events(events, sample_students_data, [])
 
-        assert len(df) == 0
+        assert lessons == {}
         assert "Skipping all-day event: 'Tutoring Alice Smith'" in caplog.text
 
     def test_filter_by_students_to_invoice_list(
@@ -368,14 +364,13 @@ class TestProcessEvents:
         ]
 
         # Only process Alice Smith
-        df = process_events(
+        lessons = process_events(
             events,
             sample_students_data,
             ["Alice Smith"]
         )
 
-        assert len(df) == 1
-        assert df.iloc[0]["student"] == "Alice Smith"
+        assert list(lessons) == ["Alice Smith"]
 
     def test_student_not_in_student_data_logs_error(
         self, sample_students_data, caplog
@@ -392,55 +387,52 @@ class TestProcessEvents:
         ]
 
         with caplog.at_level(logging.ERROR):
-            df = process_events(
+            lessons = process_events(
                 events,
                 sample_students_data,
                 []
             )
 
-        assert len(df) == 0
+        assert lessons == {}
         assert "Student 'Unknown Student' not found in students.json" in caplog.text
 
-    def test_dataframe_datetime_conversion_to_utc(
-        self, sample_students_data
-    ):
-        """DataFrame start/end columns should be converted to UTC datetime."""
-
+    def test_lessons_have_timezone_aware_times(self, sample_students_data):
+        """Lesson times should keep the offset Google gives them."""
         events = [
             {
                 "summary": "Tutoring Alice Smith",
-                "attendees": [{"email": "tutor@example.com", "self": True}],
-                "start": {"dateTime": "2024-01-15T10:00:00Z"},
-                "end": {"dateTime": "2024-01-15T11:00:00Z"}
+                "start": {"dateTime": "2024-07-15T10:00:00+01:00"},
+                "end": {"dateTime": "2024-07-15T11:30:00+01:00"}
             }
         ]
 
-        df = process_events(
-            events,
-            sample_students_data,
-            []
-        )
+        (lesson,) = process_events(events, sample_students_data, [])["Alice Smith"]
 
-        # Verify datetime columns are pandas datetime with UTC timezone
-        assert pd.api.types.is_datetime64_any_dtype(df["start"])
-        assert pd.api.types.is_datetime64_any_dtype(df["end"])
-        assert df["start"].dt.tz is not None  # Has timezone
+        assert lesson.start == datetime(2024, 7, 15, 9, 0, tzinfo=UTC)
+        assert lesson.duration == timedelta(hours=1, minutes=30)
 
-    def test_empty_events_list_returns_empty_dataframe(
+    def test_lessons_are_grouped_by_student_in_calendar_order(
         self, sample_students_data
     ):
-        """Empty events list should return empty DataFrame with correct columns."""
+        """Each student's lessons should stay in the order Google gave."""
+        events = [
+            {"summary": f"Tutoring {name}",
+             "start": {"dateTime": f"2024-01-{day}T10:00:00Z"},
+             "end": {"dateTime": f"2024-01-{day}T11:00:00Z"}}
+            for name, day in [("Bob Jones", 15), ("Alice Smith", 16),
+                              ("Bob Jones", 17)]
+        ]
 
-        df = process_events(
-            [],
-            sample_students_data,
-            []
-        )
+        lessons = process_events(events, sample_students_data, [])
 
-        assert len(df) == 0
-        assert list(df.columns) == ["student", "start", "end", "rate", "client_type"]
+        assert list(lessons) == ["Bob Jones", "Alice Smith"]
+        assert [lesson.start.day for lesson in lessons["Bob Jones"]] == [15, 17]
 
-    def test_cancelled_events_excluded_from_dataframe(
+    def test_empty_events_list_returns_no_lessons(self, sample_students_data):
+        """Empty events list should give no lessons."""
+        assert process_events([], sample_students_data, []) == {}
+
+    def test_cancelled_events_excluded(
         self, sample_students_data
     ):
         """Cancelled events should be filtered out before invoice generation."""
@@ -469,15 +461,15 @@ class TestProcessEvents:
             },
         ]
 
-        df = process_events(
+        lessons = process_events(
             events,
             sample_students_data,
             []
         )
 
-        assert len(df) == 1
-        assert df.iloc[0]["student"] == "Alice Smith"
-        assert df.iloc[0]["start"].strftime("%Y-%m-%d") == "2024-01-15"
+        assert [lesson.start.date() for lesson in lessons["Alice Smith"]] == [
+            date(2024, 1, 15)
+        ]
 
     def test_logging_summary_processed_lessons(
         self, sample_students_data, caplog

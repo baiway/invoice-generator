@@ -7,7 +7,8 @@ invited, by the event title.
 """
 
 import re
-import pandas as pd
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any
 
 from invoice_generator.models import StudentInfo
@@ -19,6 +20,18 @@ logger = get_logger(__name__)
 PMT = re.compile(r"\bPMT\b")  # paid through the agency, so not invoiced
 BLUE_EDUCATION = re.compile(r"^(\S.*?)\s+BAC\b")  # "Joe Bloggs BAC Maths"
 IN_PERSON = re.compile(r"^Tutoring\s+(\S.*)")  # "Tutoring Joe Bloggs"
+
+
+@dataclass(frozen=True)
+class Lesson:
+    """A single lesson, with timezone-aware start and end times."""
+
+    start: datetime
+    end: datetime
+
+    @property
+    def duration(self) -> timedelta:
+        return self.end - self.start
 
 
 def is_billable(event: dict[str, Any]) -> bool:
@@ -95,18 +108,18 @@ def process_events(
     events: list[dict[str, Any]],
     student_data: dict[str, StudentInfo],
     students_to_invoice: list[str],
-) -> pd.DataFrame:
-    """Match Google Calendar events to students and extract lesson information.
+) -> dict[str, list[Lesson]]:
+    """Match Google Calendar events to students.
 
     Args:
-        events: List of Google Calendar events
+        events: List of Google Calendar events, ordered by start time
         student_data: Dictionary mapping student names to StudentInfo models
         students_to_invoice: List of specific students to process (empty = all)
 
     Returns:
-        DataFrame with columns: student, start, end, rate, client_type
+        Each student seen, mapped to their lessons in calendar order
     """
-    lessons: list[list[Any]] = []
+    lessons: dict[str, list[Lesson]] = {}
 
     for event in events:
         title = event.get("summary")
@@ -136,23 +149,9 @@ def process_events(
             logger.warning(f"Skipping all-day event: '{title}'")
             continue
 
-        student_info = student_data[student_name]
-        lessons.append(
-            [student_name, start, end, student_info.rate, student_info.client_type]
-        )
+        lesson = Lesson(datetime.fromisoformat(start), datetime.fromisoformat(end))
+        lessons.setdefault(student_name, []).append(lesson)
 
-    df = pd.DataFrame(
-        lessons, columns=["student", "start", "end", "rate", "client_type"]
-    )
-
-    # Convert start and end columns to datetime for proper handling.
-    # `df.assign` returns a new DataFrame, avoiding a spurious
-    # ChainedAssignmentError FutureWarning that pandas 2.2.x raises for
-    # `df["col"] = pd.to_datetime(df["col"], ...)`.
-    df = df.assign(
-        start=pd.to_datetime(df["start"], utc=True),
-        end=pd.to_datetime(df["end"], utc=True),
-    )
-
-    logger.info(f"Processed {len(df)} lessons from {len(events)} events")
-    return df
+    count = sum(len(student_lessons) for student_lessons in lessons.values())
+    logger.info(f"Processed {count} lessons from {len(events)} events")
+    return lessons

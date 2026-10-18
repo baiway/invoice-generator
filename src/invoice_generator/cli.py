@@ -187,13 +187,8 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Fetching and processing Google Calendar events")
     events = fetch_events(service, start_date, end_date)
 
-    # Matches Google Calendar events to students listed in `students.json`,
-    # producing a `pandas.DataFrame` with the following structure:
-    #
-    # student |    start (datetime)    |     end (datetime)     | rate | client_type
-    # ------------------------------------------------------------------------------
-    #  Alice  | 2024-09-08 11:00:00+00 | 2024-09-08 12:00:00+00 |  50  |   private
-    #  Bob    | 2024-09-08 14:00:00+00 | 2024-09-08 15:00:00+00 |  40  |   agency
+    # Match events to the students listed in `students.json`, giving each
+    # student's lessons: {"Alice": [Lesson(start, end), ...], ...}
     lessons = process_events(events, student_data, args.only)
     console.print("[green]✓[/green] [cyan]Events fetched and processed[/cyan]")
 
@@ -205,8 +200,9 @@ def main(argv: list[str] | None = None) -> None:
 
     # Write invoices
     logger.info("Writing invoices...")
-    invoices = write_invoices(lessons, start_date, end_date, bank_details,
-                              contact_details, Path(args.output_dir))
+    invoices = write_invoices(lessons, student_data, start_date, end_date,
+                              bank_details, contact_details,
+                              Path(args.output_dir))
     logger.info(f"Invoices saved to: {invoices}")
     console.print(f"\n[cyan]Invoices saved to:[/cyan] {invoices}")
     console.print(f"[cyan]Detailed logs:[/cyan] {log_file}\n")

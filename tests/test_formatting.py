@@ -26,6 +26,11 @@ class TestFormatBritishDate:
         dt = datetime(2023, 12, 31, 23, 59)
         assert format_british_date(dt) == "31/12/2023"
 
+    def test_uses_uk_date(self):
+        """00:30 BST on 2nd July is still 1st July in UTC; show the UK date."""
+        dt = datetime(2024, 7, 1, 23, 30, tzinfo=ZoneInfo("UTC"))
+        assert format_british_date(dt) == "02/07/2024"
+
 
 class TestFormat24hTime:
     """Tests for format_24h_time function."""
