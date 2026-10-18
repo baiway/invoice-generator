@@ -48,8 +48,9 @@ def get_invoice_period(
     """
     # Get the last day of the month for `start_date`
     _, last_day = calendar.monthrange(start_date.year, start_date.month)
+    month_end = start_date.replace(day=last_day)
 
-    if (start_date.day == 1) and (end_date.day == last_day):
+    if start_date.day == 1 and end_date.date() == month_end.date():
         return start_date.strftime("%B %Y")  # covers whole month
     else:
         formatted_start_date = start_date.strftime("%d/%m/%Y")

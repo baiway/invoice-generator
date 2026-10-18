@@ -57,6 +57,26 @@ class TestGetInvoicePeriod:
         result = get_invoice_period(start, end)
         assert result == "01/01/2024 to 28/02/2024"
 
+    def test_period_ending_on_a_later_months_last_day(self):
+        """Ending on the 31st of a later month is not a single month."""
+        start = datetime(2024, 1, 1)
+        end = datetime(2024, 3, 31)
+        result = get_invoice_period(start, end)
+        assert result == "01/01/2024 to 31/03/2024"
+
+    def test_same_month_a_year_later(self):
+        """January to the following January is not "January"."""
+        start = datetime(2024, 1, 1)
+        end = datetime(2025, 1, 31)
+        result = get_invoice_period(start, end)
+        assert result == "01/01/2024 to 31/01/2025"
+
+    def test_end_time_of_day_is_ignored(self):
+        """The CLI's end date runs to 23:59:59; it is still a whole month."""
+        start = datetime(2024, 1, 1)
+        end = datetime(2024, 1, 31, 23, 59, 59)
+        assert get_invoice_period(start, end) == "January 2024"
+
     def test_single_day_invoice(self):
         """Single day invoice should return date range format."""
         start = datetime(2024, 1, 15)
