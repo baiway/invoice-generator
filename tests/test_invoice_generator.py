@@ -1,18 +1,18 @@
 """
 Tests for src/invoice_generator/invoice_generator.py PDF generation and invoice creation.
 
-This module tests invoice generation logic including PDF creation,
-calculations, and formatting. PDFs are actually generated to verify
-the full rendering pipeline works correctly.
+PDFs are actually rendered, then read back, to verify the full
+pipeline works correctly.
 """
 
 import logging
 import pytest
 from datetime import datetime, timedelta, UTC
+from pypdf import PdfReader
 
 from invoice_generator.invoice_generator import (
+    format_invoice,
     get_invoice_period,
-    extract_page_content,
     write_invoices,
 )
 from invoice_generator.event_processing import Lesson
@@ -65,51 +65,6 @@ class TestGetInvoicePeriod:
         assert result == "15/01/2024 to 15/01/2024"
 
 
-class TestExtractPageContent:
-    """Tests for extract_page_content function."""
-
-    def test_extract_container_div(self):
-        """Should extract content inside <div class='container'>."""
-        html = """
-        <html>
-        <body>
-            <div class="container">
-                <h1>Invoice</h1>
-                <p>Content here</p>
-            </div>
-        </body>
-        </html>
-        """
-        result = extract_page_content(html)
-        assert '<div class="container">' in result
-        assert '<h1>Invoice</h1>' in result
-        assert '<p>Content here</p>' in result
-
-    def test_extract_from_complete_html_document(self):
-        """Should extract container from complete HTML structure."""
-        html = """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Invoice</title>
-        </head>
-        <body>
-            <div class="header">Header content</div>
-            <div class="container">
-                <h1>Main Invoice Content</h1>
-            </div>
-            <div class="footer">Footer content</div>
-        </body>
-        </html>
-        """
-        result = extract_page_content(html)
-        assert '<div class="container">' in result
-        assert '<h1>Main Invoice Content</h1>' in result
-        assert "Header content" not in result  # Outside container
-        assert "Footer content" not in result  # Outside container
-
-
 def lesson(day, hour, minutes=60):
     """A lesson on `day` January 2024, starting at `hour` UTC."""
     start = datetime(2024, 1, day, hour, tzinfo=UTC)
@@ -138,6 +93,42 @@ def pdfs(directory):
     return sorted(path.name for path in directory.glob("*.pdf"))
 
 
+def pages(path):
+    """The text of each page of a PDF."""
+    return [page.extract_text() for page in PdfReader(path).pages]
+
+
+class TestFormatInvoice:
+    """Tests for format_invoice function."""
+
+    def test_formats_sessions_and_totals(self):
+        """1 hour + 1.5 hours at £50/hour should come to £125."""
+        invoice = format_invoice(
+            "Alice", [lesson(15, 10), lesson(16, 10, 90)], 50.0
+        )
+
+        assert invoice == {
+            "student": "Alice",
+            "sessions": [
+                {"date": "15/01/2024", "time": "10:00 until 11:00 (1 hour)"},
+                {"date": "16/01/2024",
+                 "time": "10:00 until 11:30 (1 hour 30 mins)"},
+            ],
+            "total_time": "2 hours 30 mins",
+            "rate": "£50.00/hour",
+            "amount_owed": "£125.00",
+        }
+
+    def test_times_are_shown_in_uk_time(self):
+        """A 10:00 UTC lesson in summer took place at 11:00 BST."""
+        start = datetime(2024, 7, 15, 10, tzinfo=UTC)
+        invoice = format_invoice(
+            "Alice", [Lesson(start, start + timedelta(hours=1))], 50.0
+        )
+
+        assert invoice["sessions"][0]["time"] == "11:00 until 12:00 (1 hour)"
+
+
 class TestWriteInvoices:
     """Tests for write_invoices function."""
 
@@ -151,7 +142,7 @@ class TestWriteInvoices:
         assert result.is_dir()
 
     def test_private_client_gets_their_own_pdf(self, tmp_path, write):
-        """Private clients get one PDF each, named after them."""
+        """Private clients get a one-page PDF each, named after them."""
         student_data = {
             "Alice Mary Smith": StudentInfo(client_type="private", rate=50.0)
         }
@@ -159,17 +150,20 @@ class TestWriteInvoices:
         write({"Alice Mary Smith": [lesson(15, 10)]}, student_data)
 
         assert pdfs(tmp_path / "invoices") == ["alice-mary-smith-invoice.pdf"]
+        (page,) = pages(tmp_path / "invoices" / "alice-mary-smith-invoice.pdf")
+        assert "Alice Mary Smith invoice for January 2024" in page
 
-    def test_agency_students_share_one_pdf(self, tmp_path, write):
-        """Students from one agency are combined into the agency's PDF."""
+    def test_agency_students_share_one_pdf_a_page_each(self, tmp_path, write):
+        """Students from one agency are combined into the agency's PDF,
+        in alphabetical order."""
         student_data = {
             "Student A": StudentInfo(client_type="tutors4u", rate=40.0),
             "Student B": StudentInfo(client_type="tutors4u", rate=40.0),
             "Student C": StudentInfo(client_type="private", rate=50.0),
         }
         lessons = {
-            "Student A": [lesson(15, 10), lesson(16, 10)],
             "Student B": [lesson(17, 10)],
+            "Student A": [lesson(15, 10), lesson(16, 10)],
             "Student C": [lesson(18, 10)],
         }
 
@@ -178,36 +172,51 @@ class TestWriteInvoices:
         assert pdfs(tmp_path / "invoices") == [
             "student-c-invoice.pdf", "tutors4u-invoice.pdf"
         ]
+        first, second = pages(tmp_path / "invoices" / "tutors4u-invoice.pdf")
+        assert "Student A invoice" in first
+        assert "Student B invoice" in second
 
-    def test_amount_owed_is_hours_times_rate(self, write, monkeypatch):
-        """1 hour + 1.5 hours at £50/hour should come to £125."""
-        rendered = []
-
-        class CapturingHTML:
-            def __init__(self, string):
-                rendered.append(string)
-
-            def write_pdf(self, path, stylesheets=None):
-                pass
-
-        monkeypatch.setattr(
-            "invoice_generator.invoice_generator.HTML", CapturingHTML
-        )
+    def test_invoice_shows_lessons_totals_and_payment_details(
+        self, tmp_path, write
+    ):
+        """Everything on the invoice should make it into the PDF."""
         student_data = {"Alice": StudentInfo(client_type="private", rate=50.0)}
 
         write({"Alice": [lesson(15, 10), lesson(16, 10, 90)]}, student_data)
 
-        (html,) = rendered
-        assert "2 hours 30 mins" in html
-        assert "£125.00" in html
+        (page,) = pages(tmp_path / "invoices" / "alice-invoice.pdf")
+        for text in [
+            "15/01/2024 10:00 until 11:00 (1 hour)",
+            "16/01/2024 10:00 until 11:30 (1 hour 30 mins)",
+            "Total time 2 hours 30 mins",
+            "Rate £50.00/hour",
+            "Amount owed £125.00",
+            "Name: Test User",
+            "Sort code: 04-00-04",
+            "Account no: 1234 5678",
+            "Bank: Test Bank",
+            "Mobile: +44 0712 3456789",
+            "Email: tutor@example.com",
+        ]:
+            assert text in page
+
+    def test_names_are_not_interpreted_as_markup(self, tmp_path, write):
+        """Student names reach Typst as data, so markup characters in
+        them are printed as they are."""
+        name = "Ana *Bold* #emph[x]"
+        student_data = {name: StudentInfo(client_type="tutors4u", rate=40.0)}
+
+        write({name: [lesson(15, 10)]}, student_data)
+
+        (page,) = pages(tmp_path / "invoices" / "tutors4u-invoice.pdf")
+        assert f"{name} invoice for January 2024" in page
 
     def test_logs_each_pdf(
         self, write, sample_lessons, sample_students_data, caplog
     ):
-        """Should log each private and agency invoice written."""
+        """Should log each PDF written."""
         with caplog.at_level(logging.INFO):
             write(sample_lessons, sample_students_data)
 
-        assert "Generated invoice for Alice Smith" in caplog.text
-        assert "Generated combined invoice for tutors4u" in caplog.text
-
+        assert "Generated alice-smith-invoice.pdf" in caplog.text
+        assert "Generated tutors4u-invoice.pdf" in caplog.text

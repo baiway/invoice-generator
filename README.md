@@ -5,7 +5,6 @@ Generates PDF invoices from Google Calendar events by matching attendee email ad
 ## Requirements
 - Python >= 3.11
 - [uv](https://github.com/astral-sh/uv)
-- [Homebrew](https://brew.sh) and WeasyPrint's system libraries (`brew install weasyprint`); see [WeasyPrint's installation docs](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation) for other platforms
 - Google Calendar API credentials (instructions below)
 - A consistent naming scheme for your Google Calendar events (e.g. "Tutoring Joe Bloggs")
 
@@ -22,7 +21,6 @@ For detailed steps, refer to the [official Google Calendar API documentation](ht
 ```shell
 git clone https://github.com/baiway/invoice-generator.git
 cd invoice-generator
-brew install weasyprint
 uv sync
 ```
 
@@ -125,18 +123,16 @@ invoice-generator/
 │       ├── cli.py                # Command line interface and entry point
 │       ├── calendar_api.py       # Google Calendar API integration
 │       ├── event_processing.py   # Event classification and processing
-│       ├── invoice_generator.py  # PDF generation with WeasyPrint
+│       ├── invoice_generator.py  # PDF generation with Typst
 │       ├── data_loader.py        # JSON loading with Pydantic validation
 │       ├── models.py             # Pydantic models with validators and properties
 │       ├── constants.py          # Configuration constants
 │       ├── logging_config.py     # Logging setup (file + console handlers)
 │       ├── utils.py              # Date utilities
 │       ├── formatting.py         # Display formatting (dates, times, currency)
-│       ├── weasyprint_libs.py    # macOS library path setup for WeasyPrint
 │       ├── py.typed              # PEP 561 marker: the package ships types
 │       └── templates/            # Invoice template, shipped with the package
-│           ├── invoice-template.html
-│           └── styles.css
+│           └── invoice.typ
 ├── tests/                    # Test suite, one `test_<module>.py` per module
 ├── data/                     # Configuration files (git-ignored)
 │   ├── students.json
@@ -148,22 +144,6 @@ invoice-generator/
 ```
 
 ## Troubleshooting
-
-### WeasyPrint installation issues (macOS)
-
-If you see `cannot load library 'libgobject-2.0-0'`, the Homebrew libraries are missing or are installed somewhere `src/invoice_generator/weasyprint_libs.py` does not look (it checks `/opt/homebrew/lib` and `/usr/local/lib`). Run `brew install weasyprint`, then check where it put them:
-
-```shell
-ls "$(brew --prefix)/lib/libgobject-2.0.dylib"
-```
-
-If that path is outside both directories, point Python at it yourself before running the generator:
-
-```shell
-export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib:$DYLD_FALLBACK_LIBRARY_PATH"
-```
-
-If you still see library errors, refer to [WeasyPrint's troubleshooting docs](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting).
 
 ### Pydantic Validation Errors
 

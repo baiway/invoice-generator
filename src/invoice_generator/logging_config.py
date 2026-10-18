@@ -51,10 +51,6 @@ def setup_logging(level: int = logging.INFO) -> str:
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("googleapiclient").setLevel(logging.WARNING)
     logging.getLogger("google.auth").setLevel(logging.WARNING)
-    logging.getLogger("fontTools").setLevel(logging.CRITICAL)
-    logging.getLogger("fontTools.subset").setLevel(logging.CRITICAL)
-    logging.getLogger("fontTools.ttLib").setLevel(logging.CRITICAL)
-    logging.getLogger("weasyprint").setLevel(logging.CRITICAL)
 
     return str(Path(LOG_FILE).resolve())
 

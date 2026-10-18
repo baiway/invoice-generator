@@ -1,16 +1,18 @@
 """
 Invoice generation and PDF rendering.
 
-This module handles generating HTML invoices from lesson data and
-rendering them as PDFs using WeasyPrint.
+This module formats each student's lessons for display and renders
+them as PDFs with Typst, using `templates/invoice.typ`.
 """
 
 import calendar
+import json
 from datetime import datetime, timedelta
 from importlib import resources
 from pathlib import Path
-from jinja2 import Environment, PackageLoader, select_autoescape
-from bs4 import BeautifulSoup
+from typing import Any
+
+import typst
 from rich.progress import track
 from rich.console import Console
 
@@ -22,21 +24,12 @@ from invoice_generator.formatting import (
 )
 from invoice_generator.constants import (
     INVOICE_TEMPLATE,
-    STYLES_CSS,
     TEMPLATE_DIR,
     TEMPLATE_PACKAGE,
 )
 from invoice_generator.event_processing import Lesson
 from invoice_generator.models import BankDetails, ContactDetails, StudentInfo
 from invoice_generator.logging_config import get_logger
-from invoice_generator.weasyprint_libs import configure_library_path
-
-# Must run before WeasyPrint is imported: it `dlopen()`s its system
-# libraries at import time and needs DYLD_FALLBACK_LIBRARY_PATH set to
-# find them on macOS.
-configure_library_path()
-
-from weasyprint import HTML, CSS  # noqa: E402 (see above)
 
 logger = get_logger(__name__)
 console = Console()
@@ -64,11 +57,39 @@ def get_invoice_period(
         return f"{formatted_start_date} to {formatted_end_date}"
 
 
-def extract_page_content(rendered_html: str) -> str:
-    """Extract the content inside the <div class="container">."""
-    soup = BeautifulSoup(rendered_html, "html.parser")
-    content = soup.find("div", class_="container")
-    return str(content)
+def format_invoice(
+    student: str,
+    lessons: list[Lesson],
+    rate: float,
+) -> dict[str, Any]:
+    """Formats one student's invoice for the template.
+
+    Args:
+        student: The student's name
+        lessons: The student's lessons over the invoice period
+        rate: Hourly rate in GBP
+
+    Returns:
+        The `invoices` entry described at the top of `invoice.typ`
+    """
+    total_time = sum((lesson.duration for lesson in lessons), timedelta())
+    return {
+        "student": student,
+        "sessions": [
+            {
+                "date": format_british_date(lesson.start),
+                "time": (
+                    f"{format_24h_time(lesson.start)} until "
+                    f"{format_24h_time(lesson.end)} "
+                    f"({format_hours_minutes(lesson.duration)})"
+                ),
+            }
+            for lesson in lessons
+        ],
+        "total_time": format_hours_minutes(total_time),
+        "rate": f"{format_currency(rate)}/hour",
+        "amount_owed": format_currency(total_time / timedelta(hours=1) * rate),
+    }
 
 
 def write_invoices(
@@ -81,6 +102,9 @@ def write_invoices(
     output_dir: Path,
 ) -> Path:
     """Generates and writes invoice as PDFs for specified students over the invoice period.
+
+    Private clients get a PDF each. Students from an agency share the
+    agency's PDF, a page each.
 
     Args:
         lessons: Each student to invoice, mapped to their lessons
@@ -96,97 +120,49 @@ def write_invoices(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Initialise Jinja2 (templating) and WeasyPrint (generating PDFs)
-    # and add custom filters
-    env = Environment(
-        loader=PackageLoader(TEMPLATE_PACKAGE, TEMPLATE_DIR),
-        autoescape=select_autoescape(["html", "xml"])
-    )
-    env.filters["british_date"] = format_british_date
-    env.filters["time_24h"] = format_24h_time
-    env.filters["hours_minutes"] = format_hours_minutes
-    env.filters["currency"] = format_currency
-    template = env.get_template(INVOICE_TEMPLATE)
+    # Shared by every invoice
+    details = {
+        "period": get_invoice_period(start_date, end_date),
+        "bank": {
+            "name": bank_details.name,
+            "sort_code": bank_details.formatted_sort_code,
+            "account_number": bank_details.formatted_account_number,
+            "bank": bank_details.bank,
+        },
+        "contact": {
+            "mobile": contact_details.formatted_mobile,
+            "email": contact_details.email,
+        },
+    }
 
-    # `as_file` gives WeasyPrint a real path to resolve any relative URLs
-    # in the stylesheet against; the CSS is fully parsed on construction.
-    styles = resources.files(TEMPLATE_PACKAGE) / TEMPLATE_DIR / STYLES_CSS
-    with resources.as_file(styles) as css_path:
-        css = CSS(str(css_path))
-
-    invoice_period = get_invoice_period(start_date, end_date)
-
-    # Container to produce separate invoices for each agency; keys will be
-    # the agency names
-    agency_html: dict[str, list[str]] = {}
-
-    # Generate invoices for each student with progress bar
-    for student, student_lessons in track(
-        sorted(lessons.items()),
-        description="[cyan]Generating invoices",
-        console=console,
-        transient=True
-    ):
+    # Group invoices by the PDF they belong in: the student's name for
+    # private clients, the agency's otherwise
+    pdfs: dict[str, list[dict[str, Any]]] = {}
+    for student, student_lessons in sorted(lessons.items()):
         info = student_data[student]
-        client_type = info.client_type
-        total_time = sum((lesson.duration for lesson in student_lessons), timedelta())
-        total_charge = total_time / timedelta(hours=1) * info.rate
-
-        # Substitute lesson information into template HTML
-        rendered_html = template.render(
-            student=student,
-            invoice_period=invoice_period,
-            lessons=student_lessons,
-            total_time=total_time,
-            rate=info.rate,
-            total_charge=total_charge,
-            name=bank_details.name,
-            sort_code=bank_details.formatted_sort_code,
-            account_number=bank_details.formatted_account_number,
-            bank=bank_details.bank,
-            mobile=contact_details.formatted_mobile,
-            email=contact_details.email,
+        recipient = student if info.client_type == "private" else info.client_type
+        pdfs.setdefault(recipient, []).append(
+            format_invoice(student, student_lessons, info.rate)
         )
 
-        # Generate separate PDFs for private clients and collect agency
-        # lessons to form a combined PDF later.
-        if client_type == "private":
-            html = HTML(string=rendered_html)
-            filename = f"{student.lower()}-invoice.pdf".replace(" ", "-")
-            html.write_pdf(output_dir / filename, stylesheets=[css])
-            logger.info(f"Generated invoice for {student}")
-        else:
-            # Extract the content inside the <div class="container">
-            page_content = extract_page_content(rendered_html)
-            if client_type not in agency_html:
-                agency_html[client_type] = []
-            agency_html[client_type].append(page_content + "\n\t")
+    template = resources.files(TEMPLATE_PACKAGE) / TEMPLATE_DIR / INVOICE_TEMPLATE
+    with resources.as_file(template) as template_path:
+        for recipient, invoices in track(
+            pdfs.items(),
+            description="[cyan]Generating invoices",
+            console=console,
+            transient=True
+        ):
+            filename = f"{recipient.lower()}-invoice.pdf".replace(" ", "-")
+            data = {**details, "invoices": invoices}
+            typst.compile(
+                template_path,
+                output=output_dir / filename,
+                sys_inputs={"data": json.dumps(data)},
+            )
+            logger.info(f"Generated {filename}")
 
     # Print success message after transient progress bar disappears
     console.print("[green]✓[/green] [cyan]Invoices generated[/cyan]")
-
-    # Define outer HTML for agency invoices (this was removed by the above)
-    # `extract_page_content` call to avoid duplicating the <html>, <head>, etc.
-    # tags in the template if you see multiple students from the same agency
-    outer_html = (
-        "<!DOCTYPE html>\n"
-        "<html>\n"
-        "<head lang='en'>\n"
-        "  <meta charset='UTF-8'>\n"
-        "</head>\n"
-        "<body>\n"
-        "  {content}\n"
-        "<div class='clearfix'></div>"
-        "</body>\n"
-        "</html>\n"
-    )
-
-    # Write agency invoices; if you see multiple students from the same agency,
-    # the sessions for each student will be printed on a separate page
-    for agency, pages in agency_html.items():
-        html = HTML(string=outer_html.format(content="".join(pages)))
-        filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
-        html.write_pdf(output_dir / filename, stylesheets=[css])
-        logger.info(f"Generated combined invoice for {agency}")
 
     return output_dir.resolve()

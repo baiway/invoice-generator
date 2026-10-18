@@ -7,16 +7,14 @@ requires-python = ">=3.11"
 # Direct dependencies only, as compatibility floors: `uv.lock` pins the
 # exact versions, and `uv lock --upgrade` is how they move.
 dependencies = [
-    "beautifulsoup4>=4.12.3",
     "google-api-python-client>=2.144.0",
     "google-auth>=2.34.0",
     "google-auth-oauthlib>=1.2.1",
-    "jinja2>=3.1.4",
     "pydantic[email]>=2.0",
     "rich>=13.9.4",
+    "typst>=0.15.0",
     # Timezone data for `zoneinfo` on systems without their own (e.g. Windows)
     "tzdata>=2024.1",
-    "weasyprint>=63.0",
 ]
 
 [project.scripts]
@@ -27,7 +25,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "mypy>=1.8.0",
-    "types-beautifulsoup4",
+    "pypdf>=6.0.0",
     "ruff>=0.16.8",
 ]
 
@@ -58,7 +56,6 @@ module = [
     "google.*",
     "google_auth_oauthlib.*",
     "googleapiclient.*",
-    "weasyprint.*",
 ]
 ignore_missing_imports = true
 

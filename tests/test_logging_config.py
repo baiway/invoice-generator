@@ -132,10 +132,6 @@ class TestSetupLogging:
         assert logging.getLogger("urllib3").level == logging.WARNING
         assert logging.getLogger("googleapiclient").level == logging.WARNING
         assert logging.getLogger("google.auth").level == logging.WARNING
-        assert logging.getLogger("fontTools").level == logging.CRITICAL
-        assert logging.getLogger("fontTools.subset").level == logging.CRITICAL
-        assert logging.getLogger("fontTools.ttLib").level == logging.CRITICAL
-        assert logging.getLogger("weasyprint").level == logging.CRITICAL
 
     def test_file_handler_mode_overwrites(self, tmp_path, monkeypatch):
         """File handler should use mode='w' to overwrite existing logs."""

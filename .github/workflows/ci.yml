@@ -18,14 +18,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # WeasyPrint loads these with dlopen() at import time; the Python
-      # package does not bundle them. See `weasyprint_libs.py` for the
-      # equivalent problem on macOS.
-      - name: Install WeasyPrint system libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
-
       # Pinned to an exact release: setup-uv publishes no floating major
       # tag past v7, so `@v10` does not resolve
       - name: Install uv

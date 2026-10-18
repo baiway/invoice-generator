@@ -20,8 +20,7 @@ TOKEN_FILENAME = "token.json"
 # Templates ship inside the package; these name the resource, not a path
 TEMPLATE_PACKAGE = "invoice_generator"
 TEMPLATE_DIR = "templates"
-INVOICE_TEMPLATE = "invoice-template.html"
-STYLES_CSS = "styles.css"
+INVOICE_TEMPLATE = "invoice.typ"
 
 OUTPUT_DIR = "invoices"
 LOG_FILE = "invoice-generator.log"
