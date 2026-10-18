@@ -48,9 +48,6 @@ Invoices are saved as PDFs in the `invoices/` directory:
 
 A detailed log of each run is saved in `logs/`.
 
-> [!TIP]
-> **Adapting it for your own business.** The rules for recognising lessons from event titles are regular expressions at the top of [`event_processing.py`](src/invoice_generator/event_processing.py), and are the first thing to change. The project is also UK-specific: amounts are in pounds, times are shown in UK time, bank details are a UK sort code and account number, and invoices are A4.
-
 ## Documentation
 
 - [Setup](docs/SETUP.md): Google Calendar API credentials, the files in `data/`, naming calendar events, and troubleshooting
