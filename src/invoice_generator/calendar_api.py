@@ -12,30 +12,21 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build, Resource
 from datetime import datetime
 
-from invoice_generator.constants import (
-    CREDENTIALS_FILE,
-    TOKEN_FILE,
-    GOOGLE_CALENDAR_SCOPES,
-)
+from invoice_generator.constants import GOOGLE_CALENDAR_SCOPES
 from invoice_generator.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 
-def authenticate(
-    credentials_file: str | None = None,
-    token_file: str | None = None,
-) -> Resource:
+def authenticate(credentials_path: Path, token_path: Path) -> Resource:
     """Authenticate using Google's API.
 
-    Expects `credentials.json` in the `data/` directory and uses
-    `token.json` (also in the `data` directory) for subsequent
-    authentication.
+    Signs in through the browser the first time, then caches the result
+    in `token_path` for subsequent runs.
 
     Args:
-        credentials_file: Path to credentials.json. Defaults to
-            `CREDENTIALS_FILE`.
-        token_file: Path to token.json. Defaults to `TOKEN_FILE`.
+        credentials_path: Path to the OAuth client's `credentials.json`
+        token_path: Path to the cached `token.json`, created if missing
 
     Returns:
         Google Calendar service object
@@ -43,24 +34,24 @@ def authenticate(
     Raises:
         FileNotFoundError: If credentials.json is not found
     """
-    creds_path = Path(credentials_file or CREDENTIALS_FILE)
-    token_path = Path(token_file or TOKEN_FILE)
-    SCOPES = GOOGLE_CALENDAR_SCOPES
-
-    if not creds_path.is_file():
-        raise FileNotFoundError(f"`{creds_path.resolve()}` not found")
+    if not credentials_path.is_file():
+        raise FileNotFoundError(f"`{credentials_path.resolve()}` not found")
 
     # Load existing credentials if available
     creds = None
     if token_path.is_file():
-        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+        creds = Credentials.from_authorized_user_file(
+            token_path, GOOGLE_CALENDAR_SCOPES
+        )
 
     # Refresh or obtain new credentials if needed
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
         token_path.write_text(creds.to_json())
     elif not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
+        flow = InstalledAppFlow.from_client_secrets_file(
+            credentials_path, GOOGLE_CALENDAR_SCOPES
+        )
         creds = flow.run_local_server(port=0)
         token_path.write_text(creds.to_json())
 

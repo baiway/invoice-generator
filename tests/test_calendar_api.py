@@ -15,20 +15,16 @@ from invoice_generator.calendar_api import authenticate, fetch_events
 class TestAuthenticate:
     """Tests for authenticate function with Google OAuth."""
 
-    def test_missing_credentials_file_raises_error(self, tmp_path, monkeypatch):
+    def test_missing_credentials_file_raises_error(self, tmp_path):
         """Missing credentials.json should raise FileNotFoundError."""
         nonexistent_creds = tmp_path / "nonexistent" / "credentials.json"
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.CREDENTIALS_FILE",
-            str(nonexistent_creds)
-        )
 
         with pytest.raises(FileNotFoundError) as exc_info:
-            authenticate()
+            authenticate(nonexistent_creds, tmp_path / "token.json")
 
         assert "not found" in str(exc_info.value)
 
-    def test_existing_valid_token_used_for_auth(self, tmp_path, monkeypatch):
+    def test_existing_valid_token_used_for_auth(self, tmp_path):
         """Existing valid token should be used without refresh."""
         # Create credentials.json and token.json files
         creds_file = tmp_path / "credentials.json"
@@ -36,14 +32,6 @@ class TestAuthenticate:
         creds_file.write_text('{"installed": {}}')
         token_file.write_text('{"token": "valid_token"}')
 
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.CREDENTIALS_FILE",
-            str(creds_file)
-        )
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.TOKEN_FILE",
-            str(token_file)
-        )
 
         # Mock Credentials
         mock_creds = MagicMock()
@@ -58,7 +46,7 @@ class TestAuthenticate:
             mock_from_file.return_value = mock_creds
             mock_build.return_value = mock_service
 
-            result = authenticate()
+            result = authenticate(creds_file, token_file)
 
             # Should load existing creds and build service
             mock_from_file.assert_called_once()
@@ -68,7 +56,7 @@ class TestAuthenticate:
             assert result == mock_service
 
     def test_expired_token_with_refresh_token_triggers_refresh(
-        self, tmp_path, monkeypatch
+        self, tmp_path
     ):
         """Expired token with refresh_token should trigger refresh."""
         creds_file = tmp_path / "credentials.json"
@@ -76,14 +64,6 @@ class TestAuthenticate:
         creds_file.write_text('{"installed": {}}')
         token_file.write_text('{"token": "expired_token"}')
 
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.CREDENTIALS_FILE",
-            str(creds_file)
-        )
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.TOKEN_FILE",
-            str(token_file)
-        )
 
         # Mock expired credentials with refresh token
         mock_creds = MagicMock()
@@ -100,7 +80,7 @@ class TestAuthenticate:
             mock_from_file.return_value = mock_creds
             mock_build.return_value = mock_service
 
-            result = authenticate()
+            result = authenticate(creds_file, token_file)
 
             # Should refresh the credentials
             mock_creds.refresh.assert_called_once()
@@ -109,7 +89,7 @@ class TestAuthenticate:
             assert result == mock_service
 
     def test_invalid_token_triggers_new_oauth_flow(
-        self, tmp_path, monkeypatch
+        self, tmp_path
     ):
         """Invalid token without refresh should trigger new OAuth flow."""
         creds_file = tmp_path / "credentials.json"
@@ -117,14 +97,6 @@ class TestAuthenticate:
         creds_file.write_text('{"installed": {}}')
         token_file.write_text('{"token": "invalid_token"}')
 
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.CREDENTIALS_FILE",
-            str(creds_file)
-        )
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.TOKEN_FILE",
-            str(token_file)
-        )
 
         # Mock invalid credentials (no refresh token)
         mock_creds_invalid = MagicMock()
@@ -148,7 +120,7 @@ class TestAuthenticate:
             mock_flow_create.return_value = mock_flow
             mock_build.return_value = mock_service
 
-            result = authenticate()
+            result = authenticate(creds_file, token_file)
 
             # Should create new OAuth flow
             mock_flow_create.assert_called_once()
@@ -158,7 +130,7 @@ class TestAuthenticate:
             assert result == mock_service
 
     def test_no_token_file_triggers_new_oauth_flow(
-        self, tmp_path, monkeypatch
+        self, tmp_path
     ):
         """Missing token file should trigger new OAuth flow."""
         creds_file = tmp_path / "credentials.json"
@@ -166,14 +138,6 @@ class TestAuthenticate:
         creds_file.write_text('{"installed": {}}')
         # Don't create token_file - it should not exist
 
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.CREDENTIALS_FILE",
-            str(creds_file)
-        )
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.TOKEN_FILE",
-            str(token_file)
-        )
 
         # Mock new credentials from OAuth flow
         mock_creds = MagicMock()
@@ -189,7 +153,7 @@ class TestAuthenticate:
             mock_flow_create.return_value = mock_flow
             mock_build.return_value = mock_service
 
-            result = authenticate()
+            result = authenticate(creds_file, token_file)
 
             # Should create OAuth flow
             mock_flow_create.assert_called_once()
@@ -200,7 +164,7 @@ class TestAuthenticate:
             assert result == mock_service
 
     def test_returns_google_calendar_service_object(
-        self, tmp_path, monkeypatch
+        self, tmp_path
     ):
         """Should return Google Calendar service object."""
         creds_file = tmp_path / "credentials.json"
@@ -208,14 +172,6 @@ class TestAuthenticate:
         creds_file.write_text('{"installed": {}}')
         token_file.write_text('{"token": "valid_token"}')
 
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.CREDENTIALS_FILE",
-            str(creds_file)
-        )
-        monkeypatch.setattr(
-            "invoice_generator.calendar_api.TOKEN_FILE",
-            str(token_file)
-        )
 
         mock_creds = MagicMock()
         mock_creds.valid = True
@@ -228,7 +184,7 @@ class TestAuthenticate:
             mock_from_file.return_value = mock_creds
             mock_build.return_value = mock_service
 
-            result = authenticate()
+            result = authenticate(creds_file, token_file)
 
             # Verify build was called with correct arguments
             mock_build.assert_called_once_with(

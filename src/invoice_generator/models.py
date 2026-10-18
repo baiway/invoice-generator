@@ -6,9 +6,7 @@ providing runtime validation and type safety. Models store raw data
 and provide formatting methods for display purposes.
 """
 
-from collections.abc import ItemsView, KeysView, ValuesView
-
-from pydantic import BaseModel, EmailStr, Field, field_validator, RootModel
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class StudentInfo(BaseModel):
@@ -20,11 +18,6 @@ class StudentInfo(BaseModel):
         default_factory=list,
         description="Email addresses for calendar matching (can be empty for students matched by event title)"
     )
-
-    @property
-    def formatted_rate(self) -> str:
-        """Format rate to 2 decimal places for display."""
-        return f"{self.rate:.2f}"
 
 
 class BankDetails(BaseModel):
@@ -120,24 +113,3 @@ class ContactDetails(BaseModel):
         # Note: phone_number is guaranteed to have >= 10 digits by the validator
         return f"{self.country_code} {self.phone_number[:4]} {self.phone_number[4:]}"
 
-
-class StudentsData(RootModel[dict[str, StudentInfo]]):
-    """Root model for students.json file."""
-
-    root: dict[str, StudentInfo]
-
-    def __getitem__(self, item: str) -> StudentInfo:
-        """Allow dictionary-style access."""
-        return self.root[item]
-
-    def items(self) -> ItemsView[str, StudentInfo]:
-        """Allow .items() access like a dictionary."""
-        return self.root.items()
-
-    def keys(self) -> KeysView[str]:
-        """Allow .keys() access like a dictionary."""
-        return self.root.keys()
-
-    def values(self) -> ValuesView[StudentInfo]:
-        """Allow .values() access like a dictionary."""
-        return self.root.values()

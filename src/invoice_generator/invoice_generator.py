@@ -24,7 +24,6 @@ from invoice_generator.formatting import (
 )
 from invoice_generator.constants import (
     INVOICE_TEMPLATE,
-    OUTPUT_DIR,
     STYLES_CSS,
     TEMPLATE_DIR,
     TEMPLATE_PACKAGE,
@@ -79,8 +78,8 @@ def write_invoices(
     end_date: datetime,
     bank_details: BankDetails,
     contact_details: ContactDetails,
-    output_dir: str | None = None
-) -> str:
+    output_dir: Path,
+) -> Path:
     """Generates and writes invoice as PDFs for specified students over the invoice period.
 
     Args:
@@ -89,13 +88,13 @@ def write_invoices(
         end_date: End of invoice period
         bank_details: BankDetails model with payment information
         contact_details: ContactDetails model with contact information
-        output_dir: Directory to write PDF invoices to. Defaults to
-            `OUTPUT_DIR`.
+        output_dir: Directory to write PDF invoices to, created if missing
+
+    Returns:
+        Absolute path to the output directory
     """
-    # Create output directory if it does not already exist
-    output_path = Path(output_dir or OUTPUT_DIR)
-    if not output_path.exists():
-        output_path.mkdir(parents=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # Initialise Jinja2 (templating) and WeasyPrint (generating PDFs)
     # and add custom filters
     env = Environment(
@@ -143,9 +142,6 @@ def write_invoices(
         client_type = lesson_info["client_type"].iloc[0]
         total_charge = (total_hours / pd.Timedelta(hours=1)) * rate
 
-        # Only include bank details for private clients, not agencies
-        deets = True # always include payment information
-
         # Substitute lesson information into template HTML
         rendered_html = template.render(
             student=student,
@@ -154,13 +150,12 @@ def write_invoices(
             total_hours=total_hours,
             rate=rate,
             total_charge=total_charge,
-            deets=deets,
-            name=bank_details.name if deets else "",
-            sort_code=bank_details.formatted_sort_code if deets else "",
-            account_number=bank_details.formatted_account_number if deets else "",
-            bank=bank_details.bank if deets else "",
-            mobile=contact_details.formatted_mobile if deets else "",
-            email=contact_details.email if deets else ""
+            name=bank_details.name,
+            sort_code=bank_details.formatted_sort_code,
+            account_number=bank_details.formatted_account_number,
+            bank=bank_details.bank,
+            mobile=contact_details.formatted_mobile,
+            email=contact_details.email,
         )
 
         # Generate separate PDFs for private clients and collect agency
@@ -168,7 +163,7 @@ def write_invoices(
         if client_type == "private":
             html = HTML(string=rendered_html)
             filename = f"{str(student).lower()}-invoice.pdf".replace(" ", "-")
-            html.write_pdf(output_path / filename, stylesheets=[css])
+            html.write_pdf(output_dir / filename, stylesheets=[css])
             logger.info(f"Generated invoice for {student}")
         else:
             # Extract the content inside the <div class="container">
@@ -199,15 +194,12 @@ def write_invoices(
     # Write agency invoices; if you see multiple students from the same agency,
     # the sessions for each student will be printed on a separate page
     for agency, pages in agency_html.items():
-        invoices = ""
-        for page in pages:
-             invoices += page
-        html = HTML(string=outer_html.format(content=invoices))
+        html = HTML(string=outer_html.format(content="".join(pages)))
         filename = f"{agency.lower()}-invoice.pdf".replace(" ", "-")
-        html.write_pdf(output_path / filename, stylesheets=[css])
+        html.write_pdf(output_dir / filename, stylesheets=[css])
         logger.info(f"Generated combined invoice for {agency}")
 
-    return str(output_path.resolve())
+    return output_dir.resolve()
 
 def print_inactive_students(
     lessons: pd.DataFrame,

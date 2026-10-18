@@ -9,7 +9,7 @@ different client types.
 import pandas as pd
 from typing import Any
 
-from invoice_generator.models import StudentInfo, ContactDetails
+from invoice_generator.models import StudentInfo
 from invoice_generator.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -188,7 +188,6 @@ def process_events(
     events: list[dict[str, Any]],
     student_data: dict[str, StudentInfo],
     students_to_invoice: list[str],
-    contact_details: ContactDetails
 ) -> pd.DataFrame:
     """Match Google Calendar events to students and extract lesson information.
 
@@ -201,7 +200,6 @@ def process_events(
         events: List of Google Calendar events
         student_data: Dictionary mapping student names to StudentInfo models
         students_to_invoice: List of specific students to process (empty = all)
-        contact_details: ContactDetails model with contact information
 
     Returns:
         DataFrame with columns: student, start, end, rate, client_type

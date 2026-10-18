@@ -7,7 +7,6 @@ the full rendering pipeline works correctly.
 """
 
 import pandas as pd
-from pathlib import Path
 from datetime import datetime, UTC
 
 from invoice_generator.invoice_generator import (
@@ -114,14 +113,13 @@ class TestWriteInvoices:
     """Tests for write_invoices function."""
 
     def test_creates_output_directory_if_not_exists(
-        self, tmp_path, monkeypatch, sample_lessons_dataframe,
+        self, tmp_path, sample_lessons_dataframe,
         sample_bank_details_model, sample_contact_details_model
     ):
         """Should create output directory if it doesn't exist."""
         output_dir = tmp_path / "new_output"
         assert not output_dir.exists()
 
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         start = datetime(2024, 1, 1, tzinfo=UTC)
         end = datetime(2024, 1, 31, tzinfo=UTC)
@@ -131,19 +129,19 @@ class TestWriteInvoices:
             start,
             end,
             sample_bank_details_model,
-            sample_contact_details_model
+            sample_contact_details_model,
+            output_dir
         )
 
         assert output_dir.exists()
         assert output_dir.is_dir()
 
     def test_generates_pdf_for_private_client(
-        self, tmp_path, monkeypatch, sample_bank_details_model,
+        self, tmp_path, sample_bank_details_model,
         sample_contact_details_model
     ):
         """Should generate PDF file for private client."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         # Create lessons DataFrame with private client
         lessons = pd.DataFrame({
@@ -162,7 +160,8 @@ class TestWriteInvoices:
             start,
             end,
             sample_bank_details_model,
-            sample_contact_details_model
+            sample_contact_details_model,
+            output_dir
         )
 
         pdf_file = output_dir / "alice-smith-invoice.pdf"
@@ -170,12 +169,11 @@ class TestWriteInvoices:
         assert pdf_file.stat().st_size > 0
 
     def test_private_client_filename_format(
-        self, tmp_path, monkeypatch, sample_bank_details_model,
+        self, tmp_path, sample_bank_details_model,
         sample_contact_details_model
     ):
         """Private client PDFs should use lowercase-hyphenated filenames."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Alice Mary Smith"],
@@ -193,7 +191,8 @@ class TestWriteInvoices:
             start,
             end,
             sample_bank_details_model,
-            sample_contact_details_model
+            sample_contact_details_model,
+            output_dir
         )
 
         # Check filename is lowercase with hyphens
@@ -201,12 +200,11 @@ class TestWriteInvoices:
         assert pdf_file.exists()
 
     def test_generates_combined_pdf_for_agency(
-        self, tmp_path, monkeypatch, sample_bank_details_model,
+        self, tmp_path, sample_bank_details_model,
         sample_contact_details_model
     ):
         """Should generate combined PDF for agency clients."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Bob Jones"],
@@ -224,7 +222,8 @@ class TestWriteInvoices:
             start,
             end,
             sample_bank_details_model,
-            sample_contact_details_model
+            sample_contact_details_model,
+            output_dir
         )
 
         pdf_file = output_dir / "tutors4u-invoice.pdf"
@@ -232,12 +231,11 @@ class TestWriteInvoices:
         assert pdf_file.stat().st_size > 0
 
     def test_agency_pdf_contains_multiple_students(
-        self, tmp_path, monkeypatch, sample_bank_details_model,
+        self, tmp_path, sample_bank_details_model,
         sample_contact_details_model
     ):
         """Agency PDF should combine multiple students in one file."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         # Two students from same agency
         lessons = pd.DataFrame({
@@ -264,7 +262,8 @@ class TestWriteInvoices:
             start,
             end,
             sample_bank_details_model,
-            sample_contact_details_model
+            sample_contact_details_model,
+            output_dir
         )
 
         # Should have one combined PDF, not separate PDFs
@@ -279,7 +278,6 @@ class TestWriteInvoices:
     ):
         """Should correctly sum session durations (1h + 1.5h = 2.5h)."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Test Student", "Test Student"],
@@ -315,7 +313,8 @@ class TestWriteInvoices:
             start,
             end,
             sample_bank_details_model,
-            sample_contact_details_model
+            sample_contact_details_model,
+            output_dir
         )
 
         # Total charge: 2.5h * £50/h = £125
@@ -324,12 +323,11 @@ class TestWriteInvoices:
         assert "125" in html  # Total charge should be present
 
     def test_returns_absolute_path_to_output_directory(
-        self, tmp_path, monkeypatch, sample_lessons_dataframe,
+        self, tmp_path, sample_lessons_dataframe,
         sample_bank_details_model, sample_contact_details_model
     ):
         """Should return absolute path to output directory."""
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         start = datetime(2024, 1, 1, tzinfo=UTC)
         end = datetime(2024, 1, 31, tzinfo=UTC)
@@ -339,21 +337,21 @@ class TestWriteInvoices:
             start,
             end,
             sample_bank_details_model,
-            sample_contact_details_model
+            sample_contact_details_model,
+            output_dir
         )
 
-        assert Path(result).is_absolute()
-        assert str(output_dir.resolve()) == result
+        assert result.is_absolute()
+        assert result == output_dir.resolve()
 
     def test_logs_invoice_generation_for_private_clients(
-        self, tmp_path, monkeypatch, sample_bank_details_model,
+        self, tmp_path, sample_bank_details_model,
         sample_contact_details_model, caplog
     ):
         """Should log invoice generation for private clients."""
         import logging
 
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Alice Smith"],
@@ -372,20 +370,20 @@ class TestWriteInvoices:
                 start,
                 end,
                 sample_bank_details_model,
-                sample_contact_details_model
+                sample_contact_details_model,
+                output_dir
             )
 
         assert "Generated invoice for Alice Smith" in caplog.text
 
     def test_logs_combined_invoice_for_agencies(
-        self, tmp_path, monkeypatch, sample_bank_details_model,
+        self, tmp_path, sample_bank_details_model,
         sample_contact_details_model, caplog
     ):
         """Should log combined invoice generation for agencies."""
         import logging
 
         output_dir = tmp_path / "invoices"
-        monkeypatch.setattr("invoice_generator.invoice_generator.OUTPUT_DIR", str(output_dir))
 
         lessons = pd.DataFrame({
             "student": ["Bob Jones"],
@@ -404,7 +402,8 @@ class TestWriteInvoices:
                 start,
                 end,
                 sample_bank_details_model,
-                sample_contact_details_model
+                sample_contact_details_model,
+                output_dir
             )
 
         assert "Generated combined invoice for tutors4u" in caplog.text

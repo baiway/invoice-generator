@@ -6,7 +6,6 @@ fetch -> process -> render pipeline. Installed as the `generate-invoices`
 command; see `[project.scripts]` in `pyproject.toml`.
 """
 
-import json
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +17,7 @@ from invoice_generator.utils import get_last_full_month
 from invoice_generator.invoice_generator import write_invoices, print_inactive_students
 from invoice_generator.data_loader import load_student_data, load_bank_details, load_contact_details
 from invoice_generator.logging_config import setup_logging, get_logger
+from invoice_generator.models import StudentInfo
 from invoice_generator.constants import (
     BANK_DETAILS_FILENAME,
     CONTACT_DETAILS_FILENAME,
@@ -108,41 +108,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 def validate_students(
-    student_list: list[str],
-    students_file: str | Path | None = None,
-) -> list[str]:
+    names: list[str],
+    student_data: dict[str, StudentInfo],
+) -> None:
     """Validates student names supplied via the CLI using the `--only`
-    flag. If `student_list` is empty (i.e. `--only` not used), simply
-    returns `student_list` as invoices will be generated for all
-    students seen in the invoice period so no further argument
-    validation is needed. Otherwise, verifies that all names in
-    `student_list` exist in `students.json`. If any names do not exist,
-    a ValueError is raised with the unrecognised names.
+    flag, raising a ValueError naming any that are not in
+    `students.json`. An empty list (i.e. `--only` not used) means all
+    students, so needs no validation.
 
     Args:
-        student_list: Names passed to `--only`.
-        students_file: Path to `students.json`. Defaults to the file in
-            `DATA_DIR`.
+        names: Names passed to `--only`.
+        student_data: Dictionary mapping student names to StudentInfo models
     """
-    if student_list == []:
-        return student_list
-
-    if students_file is None:
-        students_file = Path(DATA_DIR) / STUDENTS_FILENAME
-
-    with open(students_file) as f:
-        student_data = json.load(f)
-
-    student_keys = set(student_data)
-    unrecognised_names = set(student_list) - student_keys
-
+    unrecognised_names = [name for name in names if name not in student_data]
     if unrecognised_names:
         raise ValueError(
             "The following names passed using the `--only` option are not in "
             f"`students.json`: {', '.join(unrecognised_names)}"
         )
-    else:
-        return student_list
 
 
 def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
@@ -153,7 +136,7 @@ def validate_invoice_period(start: str, end: str) -> tuple[datetime, datetime]:
     last full month as the date range.
     """
     if end and not start:
-        raise ValueError("`--to` cannot be specified without `--from.`")
+        raise ValueError("`--to` cannot be specified without `--from`.")
 
     if start and not end:
         end = datetime.today().strftime("%Y-%m-%d")
@@ -183,25 +166,20 @@ def main(argv: list[str] | None = None) -> None:
     # Parse and validate command line arguments
     args = parse_args(argv)
     data_dir = Path(args.data_dir)
-    students_to_invoice = validate_students(
-        args.only, data_dir / STUDENTS_FILENAME
-    )
     start_date, end_date = validate_invoice_period(args.start, args.end)
 
     # Load and validate JSON data files
     logger.info("Loading configuration files...")
-    student_data = load_student_data(str(data_dir / STUDENTS_FILENAME))
-    bank_details = load_bank_details(str(data_dir / BANK_DETAILS_FILENAME))
-    contact_details = load_contact_details(
-        str(data_dir / CONTACT_DETAILS_FILENAME)
-    )
+    student_data = load_student_data(data_dir / STUDENTS_FILENAME)
+    bank_details = load_bank_details(data_dir / BANK_DETAILS_FILENAME)
+    contact_details = load_contact_details(data_dir / CONTACT_DETAILS_FILENAME)
+    validate_students(args.only, student_data)
     console.print("[green]✓[/green] [cyan]Configuration files loaded[/cyan]")
 
     # Authenticate Google Calendar
     logger.info("Authenticating with Google Calendar...")
     service = authenticate(
-        str(data_dir / CREDENTIALS_FILENAME),
-        str(data_dir / TOKEN_FILENAME),
+        data_dir / CREDENTIALS_FILENAME, data_dir / TOKEN_FILENAME
     )
     console.print("[green]✓[/green] [cyan]Authenticated with Google[/cyan]")
 
@@ -216,8 +194,7 @@ def main(argv: list[str] | None = None) -> None:
     # ------------------------------------------------------------------------------
     #  Alice  | 2024-09-08 11:00:00+00 | 2024-09-08 12:00:00+00 |  50  |   private
     #  Bob    | 2024-09-08 14:00:00+00 | 2024-09-08 15:00:00+00 |  40  |   agency
-    lessons = process_events(events, student_data, students_to_invoice,
-                             contact_details)
+    lessons = process_events(events, student_data, args.only)
     console.print("[green]✓[/green] [cyan]Events fetched and processed[/cyan]")
 
     # If `--only` is not specified (user is generating invoices for all
@@ -229,7 +206,7 @@ def main(argv: list[str] | None = None) -> None:
     # Write invoices
     logger.info("Writing invoices...")
     invoices = write_invoices(lessons, start_date, end_date, bank_details,
-                              contact_details, args.output_dir)
+                              contact_details, Path(args.output_dir))
     logger.info(f"Invoices saved to: {invoices}")
     console.print(f"\n[cyan]Invoices saved to:[/cyan] {invoices}")
     console.print(f"[cyan]Detailed logs:[/cyan] {log_file}\n")

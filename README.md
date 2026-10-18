@@ -106,9 +106,9 @@ Invoices are saved as PDFs in the `invoices/` directory:
 ## Development
 
 ```shell
-uv run pytest                          # tests; add `--cov` for a coverage report
-uv run ruff check                      # lint
-uv run mypy src/ generate-invoices.py  # type check
+uv run pytest      # tests; add `--cov` for a coverage report
+uv run ruff check  # lint
+uv run mypy src/   # type check
 ```
 
 `.github/workflows/ci.yml` runs all three on every push to `main` and every pull request, against the oldest and newest supported Python versions.
@@ -119,7 +119,6 @@ uv run mypy src/ generate-invoices.py  # type check
 invoice-generator/
 ├── pyproject.toml            # Project configuration
 ├── uv.lock                   # Exact versions of every dependency
-├── generate-invoices.py      # Wrapper for the installed CLI
 ├── .github/workflows/ci.yml  # Lint, type check and tests on 3.11 and 3.14
 ├── src/
 │   └── invoice_generator/    # The package itself
@@ -168,7 +167,7 @@ If you still see library errors, refer to [WeasyPrint's troubleshooting docs](ht
 
 ### Pydantic Validation Errors
 
-If you see "Validation failed" errors, check that your JSON files match the expected format:
+If you see a `ValidationError`, check that your JSON files match the expected format:
 - `students.json`: Each student needs `client_type`, `rate`, and `emails` (array of email addresses, can be empty)
 - `bank_details.json`: Sort code must be 6 digits (dashes optional). Account number must be 8 digits (spaces optional).
 - `contact_details.json`: Must have valid `country_code` (e.g., "+44"), `phone_number` (10+ digits, formatting optional), and `email` fields

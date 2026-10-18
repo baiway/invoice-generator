@@ -7,7 +7,7 @@ and error handling for invalid data.
 
 import pytest
 from pydantic import ValidationError
-from invoice_generator.models import StudentInfo, BankDetails, ContactDetails, StudentsData
+from invoice_generator.models import StudentInfo, BankDetails, ContactDetails
 
 
 class TestStudentInfo:
@@ -24,20 +24,16 @@ class TestStudentInfo:
         assert student.rate == 50.0
         assert student.emails == ["alice@example.com"]
 
-    def test_student_info_missing_client_type(
-        self, invalid_student_data_missing_rate
-    ):
+    def test_student_info_missing_rate(self):
         """Missing rate should raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            StudentInfo(**invalid_student_data_missing_rate["Alice Smith"])
+            StudentInfo(client_type="private", emails=["alice@example.com"])
         assert "rate" in str(exc_info.value).lower()
 
-    def test_student_info_negative_rate(
-        self, invalid_student_data_negative_rate
-    ):
+    def test_student_info_negative_rate(self):
         """Negative rate should raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            StudentInfo(**invalid_student_data_negative_rate["Alice Smith"])
+            StudentInfo(client_type="private", rate=-50.0, emails=[])
         assert "greater than 0" in str(exc_info.value)
 
     def test_student_info_zero_rate(self):
@@ -46,10 +42,10 @@ class TestStudentInfo:
             StudentInfo(client_type="private", rate=0.0, emails=[])
         assert "greater than 0" in str(exc_info.value)
 
-    def test_student_info_invalid_email(self, invalid_student_data_bad_email):
+    def test_student_info_invalid_email(self):
         """Invalid email format should raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            StudentInfo(**invalid_student_data_bad_email["Alice Smith"])
+            StudentInfo(client_type="private", rate=50.0, emails=["not-an-email"])
         assert "email" in str(exc_info.value).lower()
 
     def test_student_info_empty_emails(self):
@@ -60,17 +56,6 @@ class TestStudentInfo:
             emails=[]  # Matched by event title only
         )
         assert student.emails == []
-
-    def test_formatted_rate_property(self):
-        """formatted_rate should format to 2 decimal places."""
-        student1 = StudentInfo(client_type="private", rate=50.0, emails=[])
-        assert student1.formatted_rate == "50.00"
-
-        student2 = StudentInfo(client_type="private", rate=45.5, emails=[])
-        assert student2.formatted_rate == "45.50"
-
-        student3 = StudentInfo(client_type="private", rate=123.456, emails=[])
-        assert student3.formatted_rate == "123.46"
 
 
 class TestBankDetails:
@@ -102,12 +87,10 @@ class TestBankDetails:
         )
         assert details.sort_code == "040004"
 
-    def test_sort_code_invalid_length(
-        self, invalid_bank_details_bad_sort_code
-    ):
+    def test_sort_code_invalid_length(self, sample_bank_details):
         """Sort code not 6 digits should raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            BankDetails(**invalid_bank_details_bad_sort_code)
+            BankDetails(**{**sample_bank_details, "sort_code": "12345"})
         assert "6 digits" in str(exc_info.value)
 
     def test_sort_code_non_numeric(self):
@@ -179,12 +162,7 @@ class TestContactDetails:
 
     def test_valid_contact_details(self, sample_contact_details):
         """Valid contact details should create model successfully."""
-        # Need to update sample_contact_details to use country_code
-        details = ContactDetails(
-            country_code="+44",
-            phone_number=sample_contact_details["mobile"],
-            email=sample_contact_details["email"]
-        )
+        details = ContactDetails(**sample_contact_details)
         assert details.country_code == "+44"
         assert details.email == "tutor@example.com"
 
@@ -204,12 +182,10 @@ class TestContactDetails:
         )
         assert details2.phone_number == "07123456789"
 
-    def test_phone_number_too_short(
-        self, invalid_contact_details_short_phone
-    ):
+    def test_phone_number_too_short(self, sample_contact_details):
         """Phone number < 10 digits should raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            ContactDetails(**invalid_contact_details_short_phone)
+            ContactDetails(**{**sample_contact_details, "phone_number": "123"})
         assert "10" in str(exc_info.value)  # Checks for "10 characters" message
 
     def test_phone_number_too_few_digits_after_normalisation(self):
@@ -225,12 +201,10 @@ class TestContactDetails:
                 email="tutor@example.com"
             )
 
-    def test_invalid_country_code_format(
-        self, invalid_contact_details_bad_country_code
-    ):
+    def test_invalid_country_code_format(self, sample_contact_details):
         r"""Country code not matching ^\+\d+$ should raise ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            ContactDetails(**invalid_contact_details_bad_country_code)
+            ContactDetails(**{**sample_contact_details, "country_code": "44"})
         # Pydantic pattern validation error
         assert "pattern" in str(exc_info.value).lower() or "match" in str(exc_info.value).lower()
 
@@ -282,47 +256,3 @@ class TestContactDetails:
         error_str = str(exc_info.value)
         assert "10" in error_str or "digit" in error_str.lower()
 
-
-class TestStudentsData:
-    """Tests for StudentsData root model."""
-
-    def test_valid_students_data(self, sample_students_data):
-        """Valid students dictionary should create model successfully."""
-        students = StudentsData(root=sample_students_data)
-        assert "Alice Smith" in students.root
-        assert "Bob Jones" in students.root
-
-    def test_iteration(self, sample_students_data):
-        """Should support iteration over student names via .keys()."""
-        students = StudentsData(root=sample_students_data)
-        names = list(students.keys())
-        assert "Alice Smith" in names
-        assert "Bob Jones" in names
-
-    def test_getitem(self, sample_students_data):
-        """Should support dictionary-style access."""
-        students = StudentsData(root=sample_students_data)
-        alice = students["Alice Smith"]
-        assert isinstance(alice, StudentInfo)
-        assert alice.client_type == "private"
-
-    def test_items_method(self, sample_students_data):
-        """Should support .items() access."""
-        students = StudentsData(root=sample_students_data)
-        items = list(students.items())
-        assert len(items) == 2
-        assert all(isinstance(info, StudentInfo) for _, info in items)
-
-    def test_keys_method(self, sample_students_data):
-        """Should support .keys() access."""
-        students = StudentsData(root=sample_students_data)
-        keys = list(students.keys())
-        assert "Alice Smith" in keys
-        assert "Bob Jones" in keys
-
-    def test_values_method(self, sample_students_data):
-        """Should support .values() access."""
-        students = StudentsData(root=sample_students_data)
-        values = list(students.values())
-        assert len(values) == 2
-        assert all(isinstance(info, StudentInfo) for info in values)

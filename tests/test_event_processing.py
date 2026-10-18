@@ -209,7 +209,7 @@ class TestProcessEvents:
     """Tests for process_events function."""
 
     def test_process_email_based_events(
-        self, sample_students_data, sample_contact_details_model
+        self, sample_students_data
     ):
         """Email-based events should be matched via attendee email."""
         from invoice_generator.event_processing import process_events
@@ -229,8 +229,7 @@ class TestProcessEvents:
         df = process_events(
             events,
             sample_students_data,
-            [],
-            sample_contact_details_model
+            []
         )
 
         assert len(df) == 1
@@ -238,7 +237,7 @@ class TestProcessEvents:
         assert df.iloc[0]["rate"] == 50.0
 
     def test_process_blue_education_events(
-        self, comprehensive_students_data, sample_contact_details_model
+        self, comprehensive_students_data
     ):
         """Blue Education events should extract name from title."""
         from invoice_generator.event_processing import process_events
@@ -255,8 +254,7 @@ class TestProcessEvents:
         df = process_events(
             events,
             comprehensive_students_data,
-            [],
-            sample_contact_details_model
+            []
         )
 
         assert len(df) == 1
@@ -264,7 +262,7 @@ class TestProcessEvents:
         assert df.iloc[0]["client_type"] == "blue_education"
 
     def test_process_in_person_events(
-        self, sample_students_data, sample_contact_details_model
+        self, sample_students_data
     ):
         """In-person events should extract name from title."""
         from invoice_generator.event_processing import process_events
@@ -281,15 +279,14 @@ class TestProcessEvents:
         df = process_events(
             events,
             sample_students_data,
-            [],
-            sample_contact_details_model
+            []
         )
 
         assert len(df) == 1
         assert df.iloc[0]["student"] == "Alice Smith"
 
     def test_skip_pmt_events(
-        self, sample_students_data, sample_contact_details_model, caplog
+        self, sample_students_data, caplog
     ):
         """PMT events should be skipped with debug log."""
         import logging
@@ -308,15 +305,14 @@ class TestProcessEvents:
             df = process_events(
                 events,
                 sample_students_data,
-                [],
-                sample_contact_details_model
+                []
             )
 
         assert len(df) == 0
         assert "Skipping PMT event" in caplog.text
 
     def test_skip_unknown_format_events(
-        self, sample_students_data, sample_contact_details_model, caplog
+        self, sample_students_data, caplog
     ):
         """Unknown format events should be skipped with warning log."""
         import logging
@@ -335,8 +331,7 @@ class TestProcessEvents:
             df = process_events(
                 events,
                 sample_students_data,
-                [],
-                sample_contact_details_model
+                []
             )
 
         assert len(df) == 0
@@ -344,7 +339,7 @@ class TestProcessEvents:
         assert "Doctor appointment" in caplog.text
 
     def test_skip_events_with_no_title(
-        self, sample_students_data, sample_contact_details_model, caplog
+        self, sample_students_data, caplog
     ):
         """Events with no title should be skipped with debug log."""
         import logging
@@ -363,15 +358,14 @@ class TestProcessEvents:
             df = process_events(
                 events,
                 sample_students_data,
-                [],
-                sample_contact_details_model
+                []
             )
 
         assert len(df) == 0
         assert "Skipping event with no title" in caplog.text
 
     def test_skip_events_where_student_name_cannot_be_extracted(
-        self, sample_students_data, sample_contact_details_model, caplog
+        self, sample_students_data, caplog
     ):
         """Events where student name can't be extracted should be skipped."""
         import logging
@@ -394,15 +388,14 @@ class TestProcessEvents:
             df = process_events(
                 events,
                 sample_students_data,
-                [],
-                sample_contact_details_model
+                []
             )
 
         assert len(df) == 0
         assert "Could not extract student_name" in caplog.text
 
     def test_filter_by_students_to_invoice_list(
-        self, sample_students_data, sample_contact_details_model
+        self, sample_students_data
     ):
         """Should only process events for specified students."""
         from invoice_generator.event_processing import process_events
@@ -426,15 +419,14 @@ class TestProcessEvents:
         df = process_events(
             events,
             sample_students_data,
-            ["Alice Smith"],
-            sample_contact_details_model
+            ["Alice Smith"]
         )
 
         assert len(df) == 1
         assert df.iloc[0]["student"] == "Alice Smith"
 
     def test_student_not_in_student_data_logs_error(
-        self, sample_students_data, sample_contact_details_model, caplog
+        self, sample_students_data, caplog
     ):
         """Student not found in student_data should log error."""
         import logging
@@ -453,15 +445,14 @@ class TestProcessEvents:
             df = process_events(
                 events,
                 sample_students_data,
-                [],
-                sample_contact_details_model
+                []
             )
 
         assert len(df) == 0
         assert "Student 'Unknown Student' not found in students.json" in caplog.text
 
     def test_dataframe_datetime_conversion_to_utc(
-        self, sample_students_data, sample_contact_details_model
+        self, sample_students_data
     ):
         """DataFrame start/end columns should be converted to UTC datetime."""
         import pandas as pd
@@ -479,8 +470,7 @@ class TestProcessEvents:
         df = process_events(
             events,
             sample_students_data,
-            [],
-            sample_contact_details_model
+            []
         )
 
         # Verify datetime columns are pandas datetime with UTC timezone
@@ -489,7 +479,7 @@ class TestProcessEvents:
         assert df["start"].dt.tz is not None  # Has timezone
 
     def test_empty_events_list_returns_empty_dataframe(
-        self, sample_students_data, sample_contact_details_model
+        self, sample_students_data
     ):
         """Empty events list should return empty DataFrame with correct columns."""
         from invoice_generator.event_processing import process_events
@@ -497,15 +487,14 @@ class TestProcessEvents:
         df = process_events(
             [],
             sample_students_data,
-            [],
-            sample_contact_details_model
+            []
         )
 
         assert len(df) == 0
         assert list(df.columns) == ["student", "start", "end", "rate", "client_type"]
 
     def test_cancelled_events_excluded_from_dataframe(
-        self, sample_students_data, sample_contact_details_model
+        self, sample_students_data
     ):
         """Cancelled events should be filtered out before invoice generation."""
         from invoice_generator.event_processing import process_events
@@ -537,8 +526,7 @@ class TestProcessEvents:
         df = process_events(
             events,
             sample_students_data,
-            [],
-            sample_contact_details_model,
+            []
         )
 
         assert len(df) == 1
@@ -546,7 +534,7 @@ class TestProcessEvents:
         assert df.iloc[0]["start"].strftime("%Y-%m-%d") == "2024-01-15"
 
     def test_logging_summary_processed_lessons(
-        self, sample_students_data, sample_contact_details_model, caplog
+        self, sample_students_data, caplog
     ):
         """Should log summary of processed lessons."""
         import logging
@@ -571,8 +559,7 @@ class TestProcessEvents:
             process_events(
                 events,
                 sample_students_data,
-                [],
-                sample_contact_details_model
+                []
             )
 
         assert "Processed 2 lessons from 2 events" in caplog.text

@@ -37,7 +37,7 @@ dev = [
 # `requires-python`.
 #   E4/E7/E9 + F  pyflakes and the pycodestyle errors worth enforcing
 #   B             bugbear: likely mistakes rather than style
-#   UP            syntax now that the floor is 3.10
+#   UP            syntax available at the `requires-python` floor
 #   SIM           simplifications that remove code
 select = ["E4", "E7", "E9", "F", "B", "UP", "SIM"]
 

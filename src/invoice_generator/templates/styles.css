@@ -25,12 +25,6 @@ h2 {
   margin-top: 30px;
 }
 
-/* Scale QR code size while maintaining aspect ratio*/
-img {
-  width: 60%;
-  height: auto;
-}
-
 /* Remove gaps between cells, apply margins, and set border styling */
 table {
   border-collapse: separate;
@@ -89,7 +83,7 @@ tr:not(:last-child) td, tr:not(:last-child) th {
   font-weight: bold;
 }
 
-/* Right column (QR code, payment link, bank details) */
+/* Right column (bank and contact details) */
 .payment-details {
   float: right;
   width: 40%;
@@ -110,10 +104,6 @@ tr:not(:last-child) td, tr:not(:last-child) th {
   padding: 5px;
   text-align: left;
   border-style : hidden!important;
-}
-/* QR code image styling */
-.qr-code {
-  margin-top: 20px;
 }
 
 /* Vertical line (border) between the left and right sides */
