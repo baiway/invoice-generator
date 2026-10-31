@@ -59,6 +59,50 @@ class TestStudentInfo:
         )
         assert student.emails == []
 
+    def test_reports_are_off_by_default(self):
+        """Students without `reports` get invoices only."""
+        student = StudentInfo(client_type="private", rate=50.0)
+        assert student.reports is False
+        assert student.folders == []
+
+    @pytest.mark.parametrize("url, folder_id", [
+        ("https://drive.google.com/drive/folders/1AbC-d_E?usp=sharing", "1AbC-d_E"),
+        ("https://drive.google.com/drive/folders/1AbC-d_E?usp=drive_link", "1AbC-d_E"),
+        ("https://drive.google.com/drive/folders/1AbC-d_E", "1AbC-d_E"),
+        ("https://drive.google.com/drive/u/0/folders/1AbC-d_E", "1AbC-d_E"),
+    ])
+    def test_folder_links_give_folder_ids(self, url, folder_id):
+        """Links copied from Drive's share dialog or address bar should
+        all give the folder's ID."""
+        student = StudentInfo(client_type="private", rate=50.0,
+                              reports=True, folders=[url])
+        assert student.folder_ids == [folder_id]
+
+    def test_folder_ids_keep_the_order_of_folders(self):
+        """One folder per subject, in the order listed."""
+        student = StudentInfo(
+            client_type="private", rate=50.0, reports=True,
+            folders=["https://drive.google.com/drive/folders/maths",
+                     "https://drive.google.com/drive/folders/physics"],
+        )
+        assert student.folder_ids == ["maths", "physics"]
+
+    @pytest.mark.parametrize("url", [
+        "https://drive.google.com/file/d/1AbC/view",
+        "https://docs.google.com/document/d/1AbC/edit",
+        "drive.google.com/drive/folders/1AbC",
+        "1AbC",
+    ])
+    def test_links_to_anything_but_a_folder_are_rejected(self, url):
+        """Files, documents and bare IDs aren't folders to look in."""
+        with pytest.raises(ValidationError, match="not a link to a Google Drive folder"):
+            StudentInfo(client_type="private", rate=50.0, folders=[url])
+
+    def test_reports_need_a_folder(self):
+        """`reports` without `folders` leaves nowhere to find lessons."""
+        with pytest.raises(ValidationError, match="`folders` must list at least one"):
+            StudentInfo(client_type="private", rate=50.0, reports=True)
+
 
 class TestBankDetails:
     """Tests for BankDetails model validation and formatting."""

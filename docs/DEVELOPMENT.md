@@ -15,15 +15,32 @@ flowchart TD
     template --> pdfs[/"PDFs in invoices/"/]
     skipped --> summary[["End-of-run summary: skipped events and inactive students"]]
     lessons --> summary
+    drive[("Google Drive")] -- "download_folder(),<br>then prepare()" --> files["Each lesson's files"]
+    lessons -- "with --reports" --> files
+    files -- "summarise(), with Apple's<br>on-device model" --> drafts[/"Reports to edit in reports/"/]
+    drafts -- "edited, then render-reports" --> reportpdfs[/"PDFs in reports/"/]
 ```
 
 A run of `generate-invoices` ([`cli.py`](../src/invoice_generator/cli.py)) goes through these stages:
 
 1. **Load the configuration.** [`data_loader.py`](../src/invoice_generator/data_loader.py) reads the JSON files in `data/` and validates them against the Pydantic models in [`models.py`](../src/invoice_generator/models.py), which also normalise sort codes, account numbers and phone numbers.
-2. **Fetch events.** [`calendar_api.py`](../src/invoice_generator/calendar_api.py) signs in to Google with read-only access, and fetches every event in the invoice period, a page of results at a time.
+2. **Fetch events.** [`google_auth.py`](../src/invoice_generator/google_auth.py) signs in to Google with read-only access, and [`calendar_api.py`](../src/invoice_generator/calendar_api.py) fetches every event in the invoice period, a page of results at a time.
 3. **Match events to students.** [`event_processing.py`](../src/invoice_generator/event_processing.py) drops cancelled events, then matches the rest by attendee email or, for events with no one else invited, by title. The rules are described in [Naming calendar events](SETUP.md#3-naming-calendar-events). Events that look like lessons but can't be matched are kept, with the reason, to report at the end.
 4. **Render invoices.** [`invoice_generator.py`](../src/invoice_generator/invoice_generator.py) groups lessons into one PDF per private client and one per agency, and formats everything for display (dates, times, durations and amounts, using [`formatting.py`](../src/invoice_generator/formatting.py)). The result is passed as JSON to the [Typst](https://typst.app) template [`invoice.typ`](../src/invoice_generator/templates/invoice.typ), which only does layout. Because names arrive as data, characters in them can never be read as Typst markup.
 5. **Report.** The CLI prints where the invoices and log were saved, then the skipped events grouped by reason, then any students with no lessons in the period.
+6. **Lesson reports** (with `--reports`). [`reports.py`](../src/invoice_generator/reports.py) finds each lesson's folder in Google Drive with [`drive_api.py`](../src/invoice_generator/drive_api.py), downloads its files, and prepares them with [`lesson_files.py`](../src/invoice_generator/lesson_files.py): images are scaled down (keeping a smaller version only if it really is smaller) and PowerPoint files reduced to their text. [`summariser.py`](../src/invoice_generator/summariser.py) then summarises the lesson in a line with Apple's on-device model. Lessons download while earlier ones are summarised. Each report is written as Typst markup, with anything from outside (summaries, names) escaped so it can't be read as markup, and the lessons are checked against the calendar.
+
+Once the reports have been edited, `render-reports` renders each one with [`report.typ`](../src/invoice_generator/templates/report.typ), which shares the invoices' styling through [`style.typ`](../src/invoice_generator/templates/style.typ). The report is included from the template as a file, rather than passed in as a string, so that Typst's errors point to the report's own lines.
+
+Lessons are only ever summarised on-device using Apple's on-device model, so students' work is never sent to a third-party service. The model is run through `fm`, the command that comes with macOS 27, so no SDK is needed. It's small, with a 4,096-token context window, and follows short prompts far better than long ones, so a lesson is summarised in steps:
+
+1. Each PDF page (rendered as an image), image and document is noted on its own, following [`page-notes.md`](../src/invoice_generator/prompts/page-notes.md). The prompt leaves out the file's name, which the model would otherwise repeat.
+2. The notes are boiled down to at most three topics, following [`lesson-topics.md`](../src/invoice_generator/prompts/lesson-topics.md). The model doesn't reliably stop at three, so the code does.
+3. The summary is the lesson's file names, without their extensions, dashes or underscores, followed by those topics, e.g. "maths questions from error log: quadratic equations, calculus, projectile motion". The file names are added by the code, not the model. They're the best guide to what a lesson was for, and when the model was asked to reword them, it dropped words like "mock exam" and "error log".
+
+The prompts have no examples or hints, because the model copies examples into its replies and applies hints where they don't fit. Given an example summary, it reused the example's topic for an unrelated lesson. Told that "IA" means coursework, it described every lesson as coursework.
+
+`fm` reads any value starting with "-" as an option, so values are attached to their options (`--text=...`) and the prompt follows `--`. Before anything else, `check_model()` runs `fm available`, so a missing `fm`, or terms not agreed to, is reported straight away.
 
 ## Checks
 
@@ -35,7 +52,7 @@ uv run ruff check  # lint
 uv run ty check    # type check
 ```
 
-- **Tests** never touch the network: the Google API is mocked. Invoices are rendered with the real Typst template and read back with `pypdf`, so the tests check the text of the PDFs rather than how they were produced. Coverage is 100%. The tests import the installed package rather than `src/`, so they exercise what users get.
+- **Tests** never touch the network or run the model: the Google API is mocked, and `fm` is replaced with a fake. Invoices are rendered with the real Typst template and read back with `pypdf`, so the tests check the text of the PDFs rather than how they were produced. Coverage is 100%. The tests import the installed package rather than `src/`, so they exercise what users get.
 - **Ruff** is used for linting only, with no formatter. Every function in `src/` must have type hints (ruff's `ANN` rules).
 - **ty** checks `src/` and `tests/`, and treats warnings as errors.
 
@@ -55,7 +72,12 @@ invoice-generator/
 ├── src/
 │   └── invoice_generator/    # The package itself
 │       ├── cli.py                # Command line interface and entry point
+│       ├── google_auth.py        # Signing in to Google
 │       ├── calendar_api.py       # Google Calendar API integration
+│       ├── drive_api.py          # Google Drive API integration (lesson folders)
+│       ├── lesson_files.py       # Preparing lesson files to be summarised
+│       ├── summariser.py         # Summarising lessons with Apple's on-device model
+│       ├── reports.py            # Writing lesson reports
 │       ├── event_processing.py   # Matching events to students
 │       ├── invoice_generator.py  # PDF generation with Typst
 │       ├── data_loader.py        # JSON loading with Pydantic validation
@@ -65,10 +87,16 @@ invoice-generator/
 │       ├── utils.py              # Date utilities
 │       ├── formatting.py         # Display formatting (dates, times, currency)
 │       ├── py.typed              # PEP 561 marker: the package ships types
+│       ├── prompts/
+│       │   ├── page-notes.md     # Prompt for noting what each page shows
+│       │   └── lesson-topics.md  # Prompt for a lesson's topics, from the notes
 │       └── templates/
+│           ├── style.typ         # Page and text styling shared by every PDF
+│           ├── report.typ        # Lesson report layout
 │           └── invoice.typ       # Invoice layout, shipped with the package
 ├── tests/                    # Test suite, one `test_<module>.py` per module
 ├── data/                     # Your configuration (git-ignored; see SETUP.md)
 ├── invoices/                 # Generated PDFs (git-ignored)
+├── reports/                  # Lesson reports (git-ignored)
 └── logs/                     # A detailed log of each run (git-ignored)
 ```

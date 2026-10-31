@@ -6,6 +6,7 @@ contact_details.json
 __pycache__
 .venv
 invoices
+reports
 logs
 data
 .DS_Store

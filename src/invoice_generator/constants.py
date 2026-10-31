@@ -21,8 +21,20 @@ TOKEN_FILENAME = "token.json"
 TEMPLATE_PACKAGE = "invoice_generator"
 TEMPLATE_DIR = "templates"
 INVOICE_TEMPLATE = "invoice.typ"
+REPORT_TEMPLATE = "report.typ"
+STYLE_TEMPLATE = "style.typ"
+
+# The prompts for Apple's on-device model, which summarises lessons, also
+# shipped in the package
+PROMPTS_DIR = "prompts"
+PAGE_NOTES_PROMPT = "page-notes.md"
+LESSON_TOPICS_PROMPT = "lesson-topics.md"
 
 OUTPUT_DIR = "invoices"
+
+# Lesson reports, as Typst markup to edit and then the PDFs made from it.
+# Relative, like `OUTPUT_DIR`.
+REPORTS_DIR = "reports"
 
 # One log per run, named after when it started (e.g.
 # `logs/2026-10-18_13-24-01.log`), so names sort in time order. Relative,
@@ -30,5 +42,6 @@ OUTPUT_DIR = "invoices"
 LOG_DIR = "logs"
 LOG_FILENAME_FORMAT = "%Y-%m-%d_%H-%M-%S.log"
 
-# Google Calendar API
+# Google APIs. Read-only access is all the generator ever needs.
 GOOGLE_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]

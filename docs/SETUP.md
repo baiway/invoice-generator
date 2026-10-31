@@ -5,14 +5,14 @@ This guide covers everything `generate-invoices` needs before its first run: acc
 ## 1. Google Calendar API credentials
 
 1. Visit the [Google Developers Console](https://console.developers.google.com/) and create a new project.
-2. Enable the Google Calendar API for your project.
+2. Enable the Google Calendar API for your project. For [lesson reports](#5-lesson-reports-optional), enable the Google Drive API too.
 3. In the "Credentials" section, create a new OAuth client ID. If prompted, configure the OAuth consent screen, and add your own Google account as a test user.
 4. Set the application type to "Desktop app" and name your client.
 5. Download the JSON file containing your credentials, and rename it `credentials.json`.
 
 For detailed steps, refer to the [official Google Calendar API documentation](https://developers.google.com/calendar/quickstart/python).
 
-The generator only asks for read-only access to your calendar.
+The generator only asks for read-only access to your calendar, and, when writing lesson reports, to your Google Drive.
 
 ## 2. The `data/` directory
 
@@ -49,6 +49,14 @@ Each student's full name maps to their details:
 - **`client_type`** is `"private"` for a client you invoice directly, who gets an invoice of their own. Anything else is the name of an agency: all of its students share one invoice, named after the agency.
 - **`rate`** is the hourly rate in pounds.
 - **`emails`** are the addresses that may be invited to the student's lessons, such as the student's and their parents'. It can be empty for students whose lessons are recognised by title instead (see [Naming calendar events](#3-naming-calendar-events)).
+- **`reports`** and **`folders`** are optional, and only needed for [lesson reports](#5-lesson-reports-optional). Set `reports` to `true` to write reports for the student, and list in `folders` the link to each Google Drive folder their lessons are kept in, e.g. one for maths and one for physics:
+  ```json
+  "reports": true,
+  "folders": [
+    "https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz?usp=sharing",
+    "https://drive.google.com/drive/folders/1ZyXwVuTsRqPoNmLkJiHgFeDcBa?usp=sharing"
+  ]
+  ```
 
 ### `bank_details.json`
 
@@ -99,12 +107,74 @@ uv run generate-invoices
 
 The first time, a browser window opens for you to sign in to Google and allow read-only access to your calendar. The result is saved as `data/token.json`, so later runs don't ask again.
 
+## 5. Lesson reports (optional)
+
+With `--reports`, `generate-invoices` also drafts a report for each student with `reports` set in `students.json`: a dated list of what each lesson covered, with links to the lesson's materials, for you to edit and then turn into a PDF.
+
+### Lesson folders
+
+Each folder in a student's `folders` holds a folder per lesson, named by its date:
+```
+Sam Maths/
+├── 2026-10-02/
+├── 2026-10-05/
+└── 2026-10-13/
+```
+
+A lesson's folder can hold anything: GoodNotes exports and other PDFs, photos and screenshots, Google Docs, Slides and Sheets, and PowerPoint files. Name files after what's in them (e.g. "Integration by substitution.pdf" rather than "Note 14 Oct 2026.pdf"): names start each lesson's summary, and are often more reliable than anything read from handwriting.
+
+### Google Drive access
+
+The generator reads the folders as you, through the same Google sign-in as your calendar, so they don't need to be shared for it to read them. The first run with `--reports` opens the browser for you to sign in again and allow read-only access to Google Drive. Make sure the Google Drive API is enabled for your project (see [step 1](#1-google-calendar-api-credentials)).
+
+The links in a report, though, only open for parents and students if the lesson folders are shared with "Anyone with the link". Folders inherit sharing from the folder they're in, so it's enough to share each of a student's `folders` once. The generator tells you about any lesson folder that isn't shared.
+
+### Apple's on-device model
+
+Lessons are summarised by the language model built into macOS, through the `fm` command that comes with macOS 27. It runs entirely on your Mac, so students' work is never sent to an AI service, or anywhere else, and it costs nothing. This is deliberate: the generator doesn't use cloud models.
+
+You need macOS 27 or later on a Mac with Apple Intelligence turned on, and to agree to the model's terms once:
+```shell
+sudo fm license
+```
+
+Each lesson's summary is its file names, then up to three topics the model found in its files, e.g. "calculus1 revision homework: related rates, trigonometric functions, integration". The model is small, so treat summaries as drafts to jog your memory, and expect to reword them. File names are used as they are, as they're often a better guide than anything the model reads.
+
+The model reads the first few pages of each PDF, images, Google Docs, Slides and Sheets, and the text of PowerPoint files, following the prompts in [`page-notes.md`](../src/invoice_generator/prompts/page-notes.md) and [`lesson-topics.md`](../src/invoice_generator/prompts/lesson-topics.md). They're written for maths and physics lessons, so edit them if you teach something else.
+
+### Writing reports
+
+```shell
+uv run generate-invoices --reports
+```
+
+Reports are written last, after the invoices, as they can take several minutes. Each is saved to `reports/` (or `--reports-dir`) as a Typst file to edit: a dated list of lessons, each linked to its folder, followed by room for a paragraph of your own. A report that's already there is never overwritten, as you may have edited it; delete it to write it again.
+
+At the end of the run, the generator lists things to check in the reports:
+- **Lessons in the calendar with no folder**, and folders with no lesson in the calendar. A lesson without a folder is listed with "TODO" in place of a summary.
+- **Lessons that couldn't be summarised or downloaded**, which also get a "TODO".
+- **Folders that aren't shared** with anyone with the link.
+- **Folders that couldn't be opened**, e.g. because a link in `folders` is wrong.
+
+### Editing and rendering reports
+
+A report is plain text with a little [Typst](https://typst.app/docs/reference/syntax/) markup: `=` starts the title, `-` starts each lesson's line, and `#link(...)[...]` links its date to its folder. Lines starting `//` are comments, left out of the PDF. Edit the summaries, fill in any "TODO"s, and replace the last comment with a paragraph or two of your own. Some characters (`$ # * _ @ < > [ ] ~` and `\`) have a meaning in Typst, so put a `\` before them to show them as they are, e.g. `\$` or `\#`.
+
+Then make the PDFs:
+```shell
+uv run render-reports                                # every report in reports/
+uv run render-reports reports/jane-doe-report.typ    # or just some
+```
+
+Each PDF is saved beside its report, e.g. `reports/jane-doe-report.pdf`. Reports that still have a "TODO" are pointed out, and a mistake in the markup is reported with the line it's on.
+
 ## Troubleshooting
 
 ### Validation errors
 
 A `ValidationError` names the file and field that are wrong. The rules are:
 - `students.json`: each student needs `client_type`, a `rate` above zero, and `emails` (a list, which can be empty)
+- `students.json`: each of `folders` must be a link to a Google Drive folder, and a student with `reports` set needs at least one
 - `bank_details.json`: the sort code must be 6 digits and the account number 8 digits, ignoring dashes and spaces
 - `contact_details.json`: `country_code` must look like `"+44"`, and `phone_number` must have at least 10 digits
 - Email addresses must be valid

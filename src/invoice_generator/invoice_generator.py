@@ -34,6 +34,14 @@ from invoice_generator.logging_config import get_logger
 logger = get_logger(__name__)
 console = Console()
 
+def covers_whole_month(start_date: datetime, end_date: datetime) -> bool:
+    """Whether a period is exactly one calendar month, e.g. from 1st June
+    to 30th June, inclusive."""
+    _, last_day = calendar.monthrange(start_date.year, start_date.month)
+    month_end = start_date.replace(day=last_day)
+    return start_date.day == 1 and end_date.date() == month_end.date()
+
+
 def get_invoice_period(
     start_date: datetime,
     end_date: datetime
@@ -46,12 +54,8 @@ def get_invoice_period(
     tutoring, longer stints (e.g. summer holiday revision where only
     one invoice is issued), or for tax purposes.
     """
-    # Get the last day of the month for `start_date`
-    _, last_day = calendar.monthrange(start_date.year, start_date.month)
-    month_end = start_date.replace(day=last_day)
-
-    if start_date.day == 1 and end_date.date() == month_end.date():
-        return start_date.strftime("%B %Y")  # covers whole month
+    if covers_whole_month(start_date, end_date):
+        return start_date.strftime("%B %Y")
     else:
         formatted_start_date = start_date.strftime("%d/%m/%Y")
         formatted_end_date = end_date.strftime("%d/%m/%Y")

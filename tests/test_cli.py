@@ -18,11 +18,15 @@ from invoice_generator.cli import (
     main,
     parse_args,
     print_inactive_students,
+    print_reports_outcome,
     print_skipped_events,
+    render_reports_main,
     validate_students,
 )
 from invoice_generator.event_processing import SkipReason, SkippedEvent
 from invoice_generator.models import StudentInfo
+from invoice_generator.reports import ReportsOutcome
+from invoice_generator.summariser import ModelUnavailable
 from invoice_generator.utils import get_last_full_month
 
 
@@ -50,6 +54,17 @@ class TestParseArgs:
                            "--output-dir", "/srv/invoices"])
         assert args.data_dir == "/srv/tutoring"
         assert args.output_dir == "/srv/invoices"
+
+    def test_reports_are_off_by_default(self):
+        """Without `--reports`, only invoices are written."""
+        args = parse_args([])
+        assert args.reports is False
+        assert args.reports_dir == "reports"
+
+    def test_report_flags(self):
+        args = parse_args(["--reports", "--reports-dir", "/srv/reports"])
+        assert args.reports is True
+        assert args.reports_dir == "/srv/reports"
 
     def test_unknown_flag_exits(self):
         """argparse should reject unrecognised flags."""
@@ -281,6 +296,43 @@ class TestPrintInactiveStudents:
         assert capsys.readouterr().out == ""
 
 
+class TestPrintReportsOutcome:
+    """Tests for print_reports_outcome function."""
+
+    def test_prints_reports_then_warnings_then_those_kept(self, tmp_path, capsys):
+        outcome = ReportsOutcome(
+            written=[tmp_path / "sam-smith-report.typ"],
+            kept=[tmp_path / "jo-bloggs-report.typ"],
+            warnings=[("Sam Smith", "no lesson folder for 2026-10-05")],
+        )
+
+        print_reports_outcome(outcome, tmp_path)
+
+        assert capsys.readouterr().out == (
+            f"\nReports saved to: {tmp_path.resolve()}\n"
+            "  sam-smith-report.typ\n"
+            "\n"
+            "Check these in the reports:\n"
+            "  Sam Smith: no lesson folder for 2026-10-05\n"
+            "\n"
+            "Reports already there, so left as they are (delete them to write "
+            "them again):\n"
+            "  jo-bloggs-report.typ\n"
+        )
+
+    def test_says_when_there_was_nothing_to_write(self, tmp_path, capsys):
+        print_reports_outcome(ReportsOutcome(), tmp_path)
+
+        assert capsys.readouterr().out == "\nNo reports to write\n"
+
+    def test_warnings_are_not_read_as_markup(self, tmp_path, capsys):
+        outcome = ReportsOutcome(warnings=[("Sam", "summary failed ([bold] x)")])
+
+        print_reports_outcome(outcome, tmp_path)
+
+        assert "Sam: summary failed ([bold] x)" in capsys.readouterr().out
+
+
 class TestMain:
     """Tests for the main entry point."""
 
@@ -291,8 +343,10 @@ class TestMain:
         for name in (
             "setup_logging", "validate_students", "load_student_data",
             "load_bank_details", "load_contact_details", "authenticate",
-            "fetch_events", "process_events", "print_skipped_events",
+            "calendar_service", "fetch_events", "process_events", "print_skipped_events",
             "print_inactive_students", "write_invoices", "console",
+            "drive_service", "write_reports", "print_reports_outcome",
+            "check_model",
         ):
             mock = MagicMock(name=name)
             monkeypatch.setattr(f"invoice_generator.cli.{name}", mock)
@@ -308,8 +362,11 @@ class TestMain:
         main(["--from", "2024-01-01", "--to", "2024-01-31"])
 
         pipeline["authenticate"].assert_called_once()
+        pipeline["calendar_service"].assert_called_once_with(
+            pipeline["authenticate"].return_value
+        )
         pipeline["fetch_events"].assert_called_once_with(
-            pipeline["authenticate"].return_value,
+            pipeline["calendar_service"].return_value,
             datetime(2024, 1, 1),
             datetime(2024, 1, 31, 23, 59, 59),
         )
@@ -317,6 +374,14 @@ class TestMain:
         assert (pipeline["process_events"].call_args.args[0]
                 is pipeline["fetch_events"].return_value)
         assert pipeline["write_invoices"].call_args.args[0] is pipeline["lessons"]
+
+    def test_asks_for_calendar_access_only(self, pipeline):
+        """Invoices need read-only calendar access, and nothing more."""
+        main([])
+
+        assert pipeline["authenticate"].call_args.args[2] == [
+            "https://www.googleapis.com/auth/calendar.readonly"
+        ]
 
     def test_reports_inactive_students_for_a_full_run(self, pipeline):
         """Without `--only`, inactive students should be reported."""
@@ -362,7 +427,7 @@ class TestMain:
         pipeline["load_contact_details"].assert_called_once_with(
             data_dir / "contact_details.json"
         )
-        pipeline["authenticate"].assert_called_once_with(
+        assert pipeline["authenticate"].call_args.args[:2] == (
             data_dir / "credentials.json", data_dir / "token.json"
         )
 
@@ -380,3 +445,138 @@ class TestMain:
             ["Alice Smith"], pipeline["load_student_data"].return_value
         )
         pipeline["print_inactive_students"].assert_not_called()
+
+    def test_no_reports_without_the_flag(self, pipeline):
+        main([])
+
+        pipeline["check_model"].assert_not_called()
+        pipeline["write_reports"].assert_not_called()
+
+    def test_reports_come_after_the_invoices_and_follow_ups(self, pipeline):
+        """Reports take a while, so everything about the invoices comes
+        first: they can be sent while the reports are written."""
+        order = []
+        for name in ("write_invoices", "print_skipped_events",
+                     "print_inactive_students", "write_reports"):
+            pipeline[name].side_effect = (
+                lambda *args, name=name: order.append(name) or MagicMock()
+            )
+
+        main(["--reports", "--reports-dir", "/srv/reports"])
+
+        assert order == ["write_invoices", "print_skipped_events",
+                         "print_inactive_students", "write_reports"]
+        args = pipeline["write_reports"].call_args.args
+        assert args[0] is pipeline["lessons"]
+        assert args[4] is pipeline["drive_service"].return_value
+        assert args[5] == Path("/srv/reports")
+        pipeline["drive_service"].assert_called_once_with(
+            pipeline["authenticate"].return_value
+        )
+        pipeline["print_reports_outcome"].assert_called_once()
+
+    def test_reports_need_drive_access(self, pipeline):
+        main(["--reports"])
+
+        assert pipeline["authenticate"].call_args.args[2] == [
+            "https://www.googleapis.com/auth/calendar.readonly",
+            "https://www.googleapis.com/auth/drive.readonly",
+        ]
+
+    def test_model_is_checked_before_anything_else(self, pipeline):
+        """Apple's model being unusable stops the run before signing in, so
+        the problem is found straight away."""
+        pipeline["check_model"].side_effect = ModelUnavailable(
+            "run `sudo fm license`"
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--reports"])
+
+        assert exc_info.value.code == 1
+        pipeline["authenticate"].assert_not_called()
+        message = pipeline["console"].print.call_args.args[0]
+        assert "Can't write reports" in message
+        assert "sudo fm license" in message
+
+    def test_model_failing_midway_stops_the_reports(self, pipeline):
+        """The invoices are already written by then."""
+        pipeline["write_reports"].side_effect = ModelUnavailable("gone")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--reports"])
+
+        assert exc_info.value.code == 1
+        pipeline["write_invoices"].assert_called_once()
+        assert "Stopped writing reports" in pipeline["console"].print.call_args.args[0]
+
+
+class TestRenderReportsMain:
+    """Tests for the `render-reports` entry point."""
+
+    @pytest.fixture(autouse=True)
+    def no_log_files(self, monkeypatch):
+        monkeypatch.setattr("invoice_generator.cli.setup_logging", MagicMock())
+
+    def write(self, path, body="= Report\n\nvectors\n"):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+        return path
+
+    def test_renders_every_report_in_the_directory(self, tmp_path, capsys):
+        reports = tmp_path / "reports"
+        self.write(reports / "a-report.typ")
+        self.write(reports / "b-report.typ", "- 2026-10-05: TODO: no lesson folder found\n"
+                                             "- 2026-10-09: TODO: summary failed\n")
+        (reports / "notes.txt").write_text("not a report")
+
+        render_reports_main(["--reports-dir", str(reports)])
+
+        assert (reports / "a-report.pdf").exists()
+        assert (reports / "b-report.pdf").exists()
+        assert not (reports / "notes.pdf").exists()
+        output = capsys.readouterr().out
+        assert f"✓ {reports / 'a-report.pdf'}\n✓ {reports / 'b-report.pdf'}\n" in output
+        assert "  still has 2 TODOs\n" in output
+
+    def test_renders_only_the_reports_named(self, tmp_path):
+        a = self.write(tmp_path / "a-report.typ")
+        self.write(tmp_path / "b-report.typ")
+
+        render_reports_main([str(a), "--reports-dir", str(tmp_path)])
+
+        assert (tmp_path / "a-report.pdf").exists()
+        assert not (tmp_path / "b-report.pdf").exists()
+
+    def test_one_todo(self, tmp_path, capsys):
+        self.write(tmp_path / "a-report.typ", "- TODO\n")
+
+        render_reports_main(["--reports-dir", str(tmp_path)])
+
+        assert "  still has 1 TODO\n" in capsys.readouterr().out
+
+    def test_carries_on_past_broken_reports_then_fails(self, tmp_path, capsys):
+        """Every report that can be rendered is, and the command exits
+        with an error if any couldn't be."""
+        self.write(tmp_path / "a-report.typ", '- #link("x")[unclosed\n')
+        self.write(tmp_path / "b-report.typ")
+
+        with pytest.raises(SystemExit) as exc_info:
+            render_reports_main(["--reports-dir", str(tmp_path)])
+
+        assert exc_info.value.code == 1
+        assert (tmp_path / "b-report.pdf").exists()
+        output = capsys.readouterr().out
+        assert f"✗ Could not render {tmp_path / 'a-report.typ'}:" in output
+        assert "unclosed delimiter" in output
+
+    def test_missing_reports_are_errors(self, tmp_path, capsys):
+        with pytest.raises(SystemExit):
+            render_reports_main([str(tmp_path / "missing-report.typ")])
+
+        assert "Could not render" in capsys.readouterr().out
+
+    def test_says_when_there_is_nothing_to_render(self, tmp_path, capsys):
+        render_reports_main(["--reports-dir", str(tmp_path / "reports")])
+
+        assert "No reports to render" in capsys.readouterr().out

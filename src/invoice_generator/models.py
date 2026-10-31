@@ -6,7 +6,17 @@ providing runtime validation and type safety. Models store raw data
 and provide formatting methods for display purposes.
 """
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+import re
+from typing import Self
+
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+# A Google Drive folder's link, as copied from Drive's "Share" dialog or
+# address bar, e.g. "https://drive.google.com/drive/folders/1AbC?usp=sharing"
+# or ".../drive/u/0/folders/1AbC". The group is the folder's ID.
+DRIVE_FOLDER_URL = re.compile(
+    r"^https://drive\.google\.com/drive/(?:u/\d+/)?folders/([\w-]+)"
+)
 
 
 class StudentInfo(BaseModel):
@@ -18,6 +28,39 @@ class StudentInfo(BaseModel):
         default_factory=list,
         description="Email addresses for calendar matching (can be empty for students matched by event title)"
     )
+    reports: bool = Field(
+        default=False,
+        description="Whether to write lesson reports for this student (with `--reports`)"
+    )
+    folders: list[str] = Field(
+        default_factory=list,
+        description="Links to the Google Drive folders holding the student's lessons, one per subject"
+    )
+
+    @field_validator("folders")
+    @classmethod
+    def check_folder_links(cls, v: list[str]) -> list[str]:
+        """Check each folder is a link to a Google Drive folder."""
+        for url in v:
+            if not DRIVE_FOLDER_URL.match(url):
+                raise ValueError(f"'{url}' is not a link to a Google Drive folder")
+        return v
+
+    @model_validator(mode="after")
+    def check_report_folders(self) -> Self:
+        """Students with reports need somewhere to find their lessons."""
+        if self.reports and not self.folders:
+            raise ValueError("`reports` is true, so `folders` must list at least one folder")
+        return self
+
+    @property
+    def folder_ids(self) -> list[str]:
+        """The IDs of the Google Drive folders in `folders`."""
+        return [
+            match.group(1)
+            for url in self.folders
+            if (match := DRIVE_FOLDER_URL.match(url))
+        ]
 
 
 class BankDetails(BaseModel):

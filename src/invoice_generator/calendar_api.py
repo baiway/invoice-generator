@@ -1,67 +1,23 @@
 """
 Google Calendar API integration.
 
-This module handles authentication and fetching events from Google Calendar.
+This module fetches events from Google Calendar. Signing in is handled by
+`google_auth`.
 """
 
-from pathlib import Path
 from typing import Any, cast
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.exceptions import RefreshError
-from google.auth.transport.requests import Request
 from googleapiclient.discovery import build, Resource
 from datetime import datetime
 
-from invoice_generator.constants import GOOGLE_CALENDAR_SCOPES
 from invoice_generator.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 
-def authenticate(credentials_path: Path, token_path: Path) -> Resource:
-    """Authenticate using Google's API.
-
-    Signs in through the browser the first time, then caches the result
-    in `token_path` for subsequent runs.
-
-    Args:
-        credentials_path: Path to the OAuth client's `credentials.json`
-        token_path: Path to the cached `token.json`, created if missing
-
-    Returns:
-        Google Calendar service object
-
-    Raises:
-        FileNotFoundError: If credentials.json is not found
-    """
-    if not credentials_path.is_file():
-        raise FileNotFoundError(f"`{credentials_path.resolve()}` not found")
-
-    # Reuse the cached token, refreshing it if it has expired. Refreshing
-    # fails if the token was revoked or has lapsed (Google expires them
-    # after 7 days for apps still in "Testing"), so sign in again then.
-    creds = None
-    if token_path.is_file():
-        creds = Credentials.from_authorized_user_file(
-            token_path, GOOGLE_CALENDAR_SCOPES
-        )
-        if creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except RefreshError:
-                logger.warning("Could not refresh Google token; signing in again")
-                creds = None
-            else:
-                token_path.write_text(creds.to_json())
-
-    if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            credentials_path, GOOGLE_CALENDAR_SCOPES
-        )
-        creds = flow.run_local_server(port=0)
-        token_path.write_text(creds.to_json())
-
+def calendar_service(creds: Credentials) -> Resource:
+    """The Google Calendar API, signed in with `creds` from
+    `google_auth.authenticate`."""
     return build("calendar", "v3", credentials=creds)
 
 
@@ -73,7 +29,7 @@ def fetch_events(
     """Fetch all Google Calendar events between a specified date range.
 
     Args:
-        service: Google Calendar service object from authenticate()
+        service: Google Calendar API, from `calendar_service`
         start_date: Start of date range. Naive datetimes are taken to be
             in the local timezone.
         end_date: End of date range, likewise
