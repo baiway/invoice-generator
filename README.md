@@ -47,7 +47,7 @@ For students with `reports` set in `students.json`, the generator can also draft
 uv run generate-invoices --reports
 ```
 
-Lessons are summarised by Apple's on-device model, so students' work never leaves your Mac: nothing is sent to an AI service. This needs macOS 27 or later, on a Mac with Apple Intelligence.
+Lessons are summarised by on-device Apple Foundation Models (via the [`fm`](https://developer.apple.com/foundation-models-framework/) program that ships with macOS 27), so students' work never leaves your Mac: nothing is sent to an AI service. This needs macOS 27 or later, on a Mac with Apple Intelligence.
 
 The invoices are written first, so you can send them while the reports are drafted. Edit the reports, then turn them into PDFs styled like the invoices:
 ```shell
