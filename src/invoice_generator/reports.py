@@ -4,21 +4,31 @@ Lesson reports.
 For each student with `reports` set in `students.json`, this module finds
 their lessons in Google Drive, summarises each with Apple's on-device model
 (see `summariser`), and writes a report as Typst markup, to be edited by
-hand.
+hand. `render_report` then turns it into a PDF styled like the invoices,
+using `templates/report.typ`.
 """
 
+import os
 import re
 import tempfile
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from importlib import resources
 from pathlib import Path
 
+import typst
 from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
 from rich.console import Console
 from rich.progress import Progress
 
+from invoice_generator.constants import (
+    REPORT_TEMPLATE,
+    STYLE_TEMPLATE,
+    TEMPLATE_DIR,
+    TEMPLATE_PACKAGE,
+)
 from invoice_generator.drive_api import LessonFolder, download_folder, find_lesson_folders
 from invoice_generator.event_processing import Lesson
 from invoice_generator.invoice_generator import covers_whole_month, get_invoice_period
@@ -33,6 +43,11 @@ console = Console()
 # Characters with a meaning in Typst markup, which must be escaped to be
 # shown as they are. "/" only matters as the start of a comment.
 MARKUP_SPECIAL = re.compile(r"([\\#$*_`@<>\[\]~]|/(?=[/*]))")
+
+
+class ReportError(Exception):
+    """Raised when an edited report can't be rendered, saying where in
+    it the problem is."""
 
 
 @dataclass(frozen=True)
@@ -276,3 +291,49 @@ def write_report(
     path.write_text(format_report(student, entries, start, end))
     logger.info(f"Wrote {path}")
     return path
+
+
+def render_report(path: Path) -> Path:
+    """Render an edited report as a PDF beside it, e.g.
+    `jane-doe-report.typ` as `jane-doe-report.pdf`.
+
+    The report is included from `templates/report.typ` rather than read
+    as a string, so that Typst's errors point to its lines. Typst can only
+    include files beside the one it compiles, so both are copied to a
+    temporary directory first.
+
+    Raises:
+        ReportError: If the report isn't valid Typst, saying where
+    """
+    output = path.with_suffix(".pdf")
+    templates = resources.files(TEMPLATE_PACKAGE) / TEMPLATE_DIR
+    with tempfile.TemporaryDirectory(prefix="render-report-") as tmp:
+        build = Path(tmp)
+        for name in (REPORT_TEMPLATE, STYLE_TEMPLATE):
+            (build / name).write_text((templates / name).read_text())
+        # In a directory of its own, so it can't clash with the templates
+        copy = build / "report" / path.name
+        copy.parent.mkdir()
+        copy.write_text(path.read_text())
+        try:
+            typst.compile(build / REPORT_TEMPLATE, output=output,
+                          sys_inputs={"report": f"report/{path.name}"})
+        except typst.TypstError as e:
+            # Point to the report rather than its copy, and leave out
+            # Typst's note that it was included from the template
+            message = e.diagnostic.split("\nhelp: while including")[0].rstrip()
+            # (as Typst shows it: relative, with symlinks such as macOS's
+            # /var -> /private/var resolved)
+            message = message.replace(os.path.relpath(copy.resolve()), str(path))
+            raise ReportError(message) from None
+    logger.info(f"Rendered {output}")
+    return output
+
+
+def count_todos(path: Path) -> int:
+    """How many lines of a report still have a "TODO", other than
+    comments. (Not by cutting lines at "//", which links contain.)"""
+    return sum(
+        "TODO" in line and not line.lstrip().startswith("//")
+        for line in path.read_text().splitlines()
+    )

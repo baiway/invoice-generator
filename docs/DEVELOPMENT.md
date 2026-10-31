@@ -18,6 +18,7 @@ flowchart TD
     drive[("Google Drive")] -- "download_folder(),<br>then prepare()" --> files["Each lesson's files"]
     lessons -- "with --reports" --> files
     files -- "summarise(), with Apple's<br>on-device model" --> drafts[/"Reports to edit in reports/"/]
+    drafts -- "edited, then render-reports" --> reportpdfs[/"PDFs in reports/"/]
 ```
 
 A run of `generate-invoices` ([`cli.py`](../src/invoice_generator/cli.py)) goes through these stages:
@@ -28,6 +29,8 @@ A run of `generate-invoices` ([`cli.py`](../src/invoice_generator/cli.py)) goes 
 4. **Render invoices.** [`invoice_generator.py`](../src/invoice_generator/invoice_generator.py) groups lessons into one PDF per private client and one per agency, and formats everything for display (dates, times, durations and amounts, using [`formatting.py`](../src/invoice_generator/formatting.py)). The result is passed as JSON to the [Typst](https://typst.app) template [`invoice.typ`](../src/invoice_generator/templates/invoice.typ), which only does layout. Because names arrive as data, characters in them can never be read as Typst markup.
 5. **Report.** The CLI prints where the invoices and log were saved, then the skipped events grouped by reason, then any students with no lessons in the period.
 6. **Lesson reports** (with `--reports`). [`reports.py`](../src/invoice_generator/reports.py) finds each lesson's folder in Google Drive with [`drive_api.py`](../src/invoice_generator/drive_api.py), downloads its files, and prepares them with [`lesson_files.py`](../src/invoice_generator/lesson_files.py): images are scaled down (keeping a smaller version only if it really is smaller) and PowerPoint files reduced to their text. [`summariser.py`](../src/invoice_generator/summariser.py) then summarises the lesson in a line with Apple's on-device model. Lessons download while earlier ones are summarised. Each report is written as Typst markup, with anything from outside (summaries, names) escaped so it can't be read as markup, and the lessons are checked against the calendar.
+
+Once the reports have been edited, `render-reports` renders each one with [`report.typ`](../src/invoice_generator/templates/report.typ), which shares the invoices' styling through [`style.typ`](../src/invoice_generator/templates/style.typ). The report is included from the template as a file, rather than passed in as a string, so that Typst's errors point to the report's own lines.
 
 Lessons are only ever summarised on-device using Apple's on-device model, so students' work is never sent to a third-party service. The model is run through `fm`, the command that comes with macOS 27, so no SDK is needed. It's small, with a 4,096-token context window, and follows short prompts far better than long ones, so a lesson is summarised in steps:
 
@@ -89,6 +92,7 @@ invoice-generator/
 │       │   └── lesson-topics.md  # Prompt for a lesson's topics, from the notes
 │       └── templates/
 │           ├── style.typ         # Page and text styling shared by every PDF
+│           ├── report.typ        # Lesson report layout
 │           └── invoice.typ       # Invoice layout, shipped with the package
 ├── tests/                    # Test suite, one `test_<module>.py` per module
 ├── data/                     # Your configuration (git-ignored; see SETUP.md)

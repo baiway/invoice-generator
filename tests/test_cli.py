@@ -20,6 +20,7 @@ from invoice_generator.cli import (
     print_inactive_students,
     print_reports_outcome,
     print_skipped_events,
+    render_reports_main,
     validate_students,
 )
 from invoice_generator.event_processing import SkipReason, SkippedEvent
@@ -508,3 +509,74 @@ class TestMain:
         assert exc_info.value.code == 1
         pipeline["write_invoices"].assert_called_once()
         assert "Stopped writing reports" in pipeline["console"].print.call_args.args[0]
+
+
+class TestRenderReportsMain:
+    """Tests for the `render-reports` entry point."""
+
+    @pytest.fixture(autouse=True)
+    def no_log_files(self, monkeypatch):
+        monkeypatch.setattr("invoice_generator.cli.setup_logging", MagicMock())
+
+    def write(self, path, body="= Report\n\nvectors\n"):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+        return path
+
+    def test_renders_every_report_in_the_directory(self, tmp_path, capsys):
+        reports = tmp_path / "reports"
+        self.write(reports / "a-report.typ")
+        self.write(reports / "b-report.typ", "- 2026-10-05: TODO: no lesson folder found\n"
+                                             "- 2026-10-09: TODO: summary failed\n")
+        (reports / "notes.txt").write_text("not a report")
+
+        render_reports_main(["--reports-dir", str(reports)])
+
+        assert (reports / "a-report.pdf").exists()
+        assert (reports / "b-report.pdf").exists()
+        assert not (reports / "notes.pdf").exists()
+        output = capsys.readouterr().out
+        assert f"✓ {reports / 'a-report.pdf'}\n✓ {reports / 'b-report.pdf'}\n" in output
+        assert "  still has 2 TODOs\n" in output
+
+    def test_renders_only_the_reports_named(self, tmp_path):
+        a = self.write(tmp_path / "a-report.typ")
+        self.write(tmp_path / "b-report.typ")
+
+        render_reports_main([str(a), "--reports-dir", str(tmp_path)])
+
+        assert (tmp_path / "a-report.pdf").exists()
+        assert not (tmp_path / "b-report.pdf").exists()
+
+    def test_one_todo(self, tmp_path, capsys):
+        self.write(tmp_path / "a-report.typ", "- TODO\n")
+
+        render_reports_main(["--reports-dir", str(tmp_path)])
+
+        assert "  still has 1 TODO\n" in capsys.readouterr().out
+
+    def test_carries_on_past_broken_reports_then_fails(self, tmp_path, capsys):
+        """Every report that can be rendered is, and the command exits
+        with an error if any couldn't be."""
+        self.write(tmp_path / "a-report.typ", '- #link("x")[unclosed\n')
+        self.write(tmp_path / "b-report.typ")
+
+        with pytest.raises(SystemExit) as exc_info:
+            render_reports_main(["--reports-dir", str(tmp_path)])
+
+        assert exc_info.value.code == 1
+        assert (tmp_path / "b-report.pdf").exists()
+        output = capsys.readouterr().out
+        assert f"✗ Could not render {tmp_path / 'a-report.typ'}:" in output
+        assert "unclosed delimiter" in output
+
+    def test_missing_reports_are_errors(self, tmp_path, capsys):
+        with pytest.raises(SystemExit):
+            render_reports_main([str(tmp_path / "missing-report.typ")])
+
+        assert "Could not render" in capsys.readouterr().out
+
+    def test_says_when_there_is_nothing_to_render(self, tmp_path, capsys):
+        render_reports_main(["--reports-dir", str(tmp_path / "reports")])
+
+        assert "No reports to render" in capsys.readouterr().out

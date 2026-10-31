@@ -20,8 +20,11 @@ from invoice_generator.event_processing import Lesson
 from invoice_generator.models import StudentInfo
 from invoice_generator.reports import (
     Entry,
+    ReportError,
+    count_todos,
     escape_markup,
     format_report,
+    render_report,
     report_filename,
     write_reports,
 )
@@ -338,3 +341,66 @@ class TestWriteReports:
         dates = re.findall(r"\[(2026-10-\d\d)\]", outcome.written[0].read_text())
         assert dates == [f"2026-10-0{day}" for day in range(1, 7)]
         assert [lesson.date.day for lesson in self.model.lessons] == list(range(1, 7))
+
+
+class TestRenderReport:
+    """Tests for render_report function."""
+
+    def test_renders_a_pdf_beside_the_report(self, tmp_path):
+        """The PDF has the report's text, with its comments left out, and
+        its links."""
+        report = tmp_path / "sam-smith-report.typ"
+        report.write_text(format_report(
+            "Sam Smith", [Entry(date(2026, 10, 2), MATHS, "vectors")], *OCTOBER
+        ).replace("// Add a paragraph", "Great progress.\n// Add a paragraph"))
+
+        pdf = render_report(report)
+
+        assert pdf == tmp_path / "sam-smith-report.pdf"
+        page = PdfReader(pdf).pages[0]
+        assert " ".join(page.extract_text().split()) == (
+            "Sam Smith lesson report for October 2026 "
+            "This month Sam and I have covered: "
+            "• 2026-10-02: vectors Great progress."
+        )
+        links = [annotation.get_object()["/A"]["/URI"]
+                 for annotation in page.annotations or []]
+        assert links == [MATHS]
+
+    @pytest.mark.parametrize("name", ["report.typ", "style.typ"])
+    def test_reports_named_like_the_templates_still_render(self, tmp_path, name):
+        report = tmp_path / name
+        report.write_text("= Hello")
+
+        assert render_report(report).exists()
+
+    def test_errors_point_to_the_report(self, tmp_path, monkeypatch):
+        """A mistake made while editing is reported at its line in the
+        report, not in a temporary copy or the template."""
+        monkeypatch.chdir(tmp_path)
+        report = tmp_path / "sam-smith-report.typ"
+        report.write_text('= Report\n\n- #link("x")[2026-10-02: vectors\n')
+
+        with pytest.raises(ReportError) as exc_info:
+            render_report(report)
+
+        message = str(exc_info.value)
+        assert message.startswith("error: unclosed delimiter")
+        assert f"{report}:3:12" in message
+        assert "while including" not in message
+        assert not (tmp_path / "sam-smith-report.pdf").exists()
+
+
+class TestCountTodos:
+    """Tests for count_todos function."""
+
+    def test_counts_lines_with_todos_but_not_comments(self, tmp_path):
+        report = tmp_path / "report.typ"
+        report.write_text(
+            "// TODO in a comment\n"
+            f'- #link("{MATHS}")[2026-10-02]: TODO: summary failed\n'
+            "- 2026-10-05: TODO: no lesson folder found\n"
+            "- 2026-10-09: vectors\n"
+        )
+
+        assert count_todos(report) == 2

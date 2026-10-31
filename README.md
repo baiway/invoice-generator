@@ -49,7 +49,10 @@ uv run generate-invoices --reports
 
 Lessons are summarised by Apple's on-device model, so students' work never leaves your Mac: nothing is sent to an AI service. This needs macOS 27 or later, on a Mac with Apple Intelligence.
 
-The invoices are written first, so you can send them while the reports are drafted.
+The invoices are written first, so you can send them while the reports are drafted. Edit the reports, then turn them into PDFs styled like the invoices:
+```shell
+uv run render-reports
+```
 
 See [Lesson reports](docs/SETUP.md#5-lesson-reports-optional) for setting up the folders and the model.
 
@@ -59,7 +62,7 @@ Invoices are saved as PDFs in the `invoices/` directory:
 - Private clients: `jane-doe-invoice.pdf`
 - Agency clients: combined into `agency-name-invoice.pdf`
 
-Lesson reports are saved in `reports/` as [Typst](https://typst.app) files to edit, e.g. `jane-doe-report.typ`.
+Lesson reports are saved in `reports/` as [Typst](https://typst.app) files to edit, e.g. `jane-doe-report.typ`, and `render-reports` saves each one's PDF beside it.
 
 A detailed log of each run is saved in `logs/`.
 

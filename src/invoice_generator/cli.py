@@ -3,7 +3,8 @@ Command line interface.
 
 This module parses and validates command line arguments, then drives the
 fetch -> process -> render pipeline. Installed as the `generate-invoices`
-command; see `[project.scripts]` in `pyproject.toml`.
+command, and `render-reports` for turning edited lesson reports into PDFs;
+see `[project.scripts]` in `pyproject.toml`.
 """
 
 import argparse
@@ -11,6 +12,7 @@ from datetime import date, datetime
 from typing import Any
 from pathlib import Path
 from rich.console import Console
+from rich.markup import escape
 from rich.text import Text
 
 from invoice_generator.calendar_api import calendar_service, fetch_events
@@ -28,7 +30,13 @@ from invoice_generator.data_loader import load_student_data, load_bank_details, 
 from invoice_generator.google_auth import authenticate
 from invoice_generator.logging_config import setup_logging, get_logger
 from invoice_generator.models import StudentInfo
-from invoice_generator.reports import ReportsOutcome, write_reports
+from invoice_generator.reports import (
+    ReportError,
+    ReportsOutcome,
+    count_todos,
+    render_report,
+    write_reports,
+)
 from invoice_generator.summariser import ModelUnavailable, check_model
 from invoice_generator.constants import (
     BANK_DETAILS_FILENAME,
@@ -366,3 +374,65 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(1) from None
         print_reports_outcome(outcome, reports_dir)
     console.print()
+
+
+def parse_render_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parses the arguments of `render-reports`.
+
+    Args:
+        argv: Argument list to parse. Defaults to `sys.argv[1:]`.
+    """
+    parser = argparse.ArgumentParser(
+        description=(
+            "Turns lesson reports, written by `generate-invoices --reports` "
+            "and edited by hand, into PDFs styled like the invoices. Each "
+            "PDF is saved beside its report."
+        )
+    )
+    parser.add_argument(
+        "reports",
+        nargs="*",
+        metavar="report",
+        help="Reports to render (default: every `.typ` file in `--reports-dir`).",
+    )
+    parser.add_argument(
+        "--reports-dir",
+        default=REPORTS_DIR,
+        metavar="path",
+        help=(
+            "Directory holding the reports. Relative paths are resolved "
+            f"against the current directory (default: `{REPORTS_DIR}`)."
+        )
+    )
+    return parser.parse_args(argv)
+
+
+def render_reports_main(argv: list[str] | None = None) -> None:
+    setup_logging()
+    args = parse_render_args(argv)
+
+    reports = [Path(report) for report in args.reports]
+    if not reports:
+        reports = sorted(Path(args.reports_dir).glob("*.typ"))
+    if not reports:
+        console.print(f"[yellow]No reports to render in {args.reports_dir}[/yellow]",
+                      soft_wrap=True)
+        return
+
+    failed = False
+    for report in reports:
+        try:
+            pdf = render_report(report)
+        except (ReportError, OSError) as e:
+            console.print(f"[red]✗ Could not render {escape(str(report))}:[/red]",
+                          soft_wrap=True)
+            console.print(str(e), markup=False, highlight=False, soft_wrap=True)
+            failed = True
+            continue
+        console.print(f"[green]✓[/green] {escape(str(pdf))}", soft_wrap=True)
+        todos = count_todos(report)
+        if todos:
+            console.print(f"  [yellow]still has {todos} TODO"
+                          f"{'s' if todos > 1 else ''}[/yellow]")
+    if failed:
+        raise SystemExit(1)

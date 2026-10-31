@@ -21,6 +21,8 @@ TOKEN_FILENAME = "token.json"
 TEMPLATE_PACKAGE = "invoice_generator"
 TEMPLATE_DIR = "templates"
 INVOICE_TEMPLATE = "invoice.typ"
+REPORT_TEMPLATE = "report.typ"
+STYLE_TEMPLATE = "style.typ"
 
 # The prompts for Apple's on-device model, which summarises lessons, also
 # shipped in the package

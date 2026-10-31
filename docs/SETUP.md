@@ -156,6 +156,18 @@ At the end of the run, the generator lists things to check in the reports:
 - **Folders that aren't shared** with anyone with the link.
 - **Folders that couldn't be opened**, e.g. because a link in `folders` is wrong.
 
+### Editing and rendering reports
+
+A report is plain text with a little [Typst](https://typst.app/docs/reference/syntax/) markup: `=` starts the title, `-` starts each lesson's line, and `#link(...)[...]` links its date to its folder. Lines starting `//` are comments, left out of the PDF. Edit the summaries, fill in any "TODO"s, and replace the last comment with a paragraph or two of your own. Some characters (`$ # * _ @ < > [ ] ~` and `\`) have a meaning in Typst, so put a `\` before them to show them as they are, e.g. `\$` or `\#`.
+
+Then make the PDFs:
+```shell
+uv run render-reports                                # every report in reports/
+uv run render-reports reports/jane-doe-report.typ    # or just some
+```
+
+Each PDF is saved beside its report, e.g. `reports/jane-doe-report.pdf`. Reports that still have a "TODO" are pointed out, and a mistake in the markup is reported with the line it's on.
+
 ## Troubleshooting
 
 ### Validation errors

@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 generate-invoices = "invoice_generator.cli:main"
+render-reports = "invoice_generator.cli:render_reports_main"
 
 [dependency-groups]
 dev = [
