@@ -12,7 +12,10 @@ dependencies = [
     "google-api-python-client>=2.144.0",
     "google-auth>=2.34.0",
     "google-auth-oauthlib>=1.2.1",
+    "pillow>=11.0.0",
     "pydantic[email]>=2.0",
+    "pypdfium2>=4.30.0",
+    "python-pptx>=1.0.0",
     "rich>=13.9.4",
     "typst>=0.15.0",
     # Timezone data for `zoneinfo` on systems without their own (e.g. Windows)
