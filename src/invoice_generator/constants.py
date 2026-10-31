@@ -22,6 +22,12 @@ TEMPLATE_PACKAGE = "invoice_generator"
 TEMPLATE_DIR = "templates"
 INVOICE_TEMPLATE = "invoice.typ"
 
+# The prompts for Apple's on-device model, which summarises lessons, also
+# shipped in the package
+PROMPTS_DIR = "prompts"
+PAGE_NOTES_PROMPT = "page-notes.md"
+LESSON_TOPICS_PROMPT = "lesson-topics.md"
+
 OUTPUT_DIR = "invoices"
 
 # One log per run, named after when it started (e.g.

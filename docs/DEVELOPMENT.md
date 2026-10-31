@@ -59,6 +59,7 @@ invoice-generator/
 │       ├── calendar_api.py       # Google Calendar API integration
 │       ├── drive_api.py          # Google Drive API integration (lesson folders)
 │       ├── lesson_files.py       # Preparing lesson files to be summarised
+│       ├── summariser.py         # Summarising lessons with Apple's on-device model
 │       ├── event_processing.py   # Matching events to students
 │       ├── invoice_generator.py  # PDF generation with Typst
 │       ├── data_loader.py        # JSON loading with Pydantic validation
@@ -68,6 +69,9 @@ invoice-generator/
 │       ├── utils.py              # Date utilities
 │       ├── formatting.py         # Display formatting (dates, times, currency)
 │       ├── py.typed              # PEP 561 marker: the package ships types
+│       ├── prompts/
+│       │   ├── page-notes.md     # Prompt for noting what each page shows
+│       │   └── lesson-topics.md  # Prompt for a lesson's topics, from the notes
 │       └── templates/
 │           ├── style.typ         # Page and text styling shared by every PDF
 │           └── invoice.typ       # Invoice layout, shipped with the package
