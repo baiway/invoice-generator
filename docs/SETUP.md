@@ -49,6 +49,14 @@ Each student's full name maps to their details:
 - **`client_type`** is `"private"` for a client you invoice directly, who gets an invoice of their own. Anything else is the name of an agency: all of its students share one invoice, named after the agency.
 - **`rate`** is the hourly rate in pounds.
 - **`emails`** are the addresses that may be invited to the student's lessons, such as the student's and their parents'. It can be empty for students whose lessons are recognised by title instead (see [Naming calendar events](#3-naming-calendar-events)).
+- **`reports`** and **`folders`** are optional, and only needed for [lesson reports](#5-lesson-reports-optional). Set `reports` to `true` to write reports for the student, and list in `folders` the link to each Google Drive folder their lessons are kept in, e.g. one for maths and one for physics:
+  ```json
+  "reports": true,
+  "folders": [
+    "https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz?usp=sharing",
+    "https://drive.google.com/drive/folders/1ZyXwVuTsRqPoNmLkJiHgFeDcBa?usp=sharing"
+  ]
+  ```
 
 ### `bank_details.json`
 
@@ -99,12 +107,29 @@ uv run generate-invoices
 
 The first time, a browser window opens for you to sign in to Google and allow read-only access to your calendar. The result is saved as `data/token.json`, so later runs don't ask again.
 
+## 5. Lesson reports (optional)
+
+With `--reports`, `generate-invoices` also drafts a report for each student with `reports` set in `students.json`: a dated list of what each lesson covered, with links to the lesson's materials, for you to edit and then turn into a PDF.
+
+### Lesson folders
+
+Each folder in a student's `folders` holds a folder per lesson, named by its date:
+```
+Sam Maths/
+├── 2026-10-02/
+├── 2026-10-05/
+└── 2026-10-13/
+```
+
+A lesson's folder can hold anything: GoodNotes exports and other PDFs, photos and screenshots, Google Docs, Slides and Sheets, and PowerPoint files. Name files after what's in them (e.g. "Integration by substitution.pdf" rather than "Note 14 Oct 2026.pdf"): names are read first, and are often more reliable than handwriting.
+
 ## Troubleshooting
 
 ### Validation errors
 
 A `ValidationError` names the file and field that are wrong. The rules are:
 - `students.json`: each student needs `client_type`, a `rate` above zero, and `emails` (a list, which can be empty)
+- `students.json`: each of `folders` must be a link to a Google Drive folder, and a student with `reports` set needs at least one
 - `bank_details.json`: the sort code must be 6 digits and the account number 8 digits, ignoring dashes and spaces
 - `contact_details.json`: `country_code` must look like `"+44"`, and `phone_number` must have at least 10 digits
 - Email addresses must be valid
