@@ -40,11 +40,26 @@ uv run generate-invoices --from 2026-09-01 --to 2026-09-30
 uv run generate-invoices --help
 ```
 
+### Lesson reports
+
+For students with `reports` set in `students.json`, the generator can also draft a report of what each lesson covered, from the lesson's files in Google Drive:
+```shell
+uv run generate-invoices --reports
+```
+
+Lessons are summarised by Apple's on-device model, so students' work never leaves your Mac: nothing is sent to an AI service. This needs macOS 27 or later, on a Mac with Apple Intelligence.
+
+The invoices are written first, so you can send them while the reports are drafted.
+
+See [Lesson reports](docs/SETUP.md#5-lesson-reports-optional) for setting up the folders and the model.
+
 ### Output
 
 Invoices are saved as PDFs in the `invoices/` directory:
 - Private clients: `jane-doe-invoice.pdf`
 - Agency clients: combined into `agency-name-invoice.pdf`
+
+Lesson reports are saved in `reports/` as [Typst](https://typst.app) files to edit, e.g. `jane-doe-report.typ`.
 
 A detailed log of each run is saved in `logs/`.
 

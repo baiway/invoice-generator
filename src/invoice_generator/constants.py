@@ -30,6 +30,10 @@ LESSON_TOPICS_PROMPT = "lesson-topics.md"
 
 OUTPUT_DIR = "invoices"
 
+# Lesson reports, as Typst markup to edit and then the PDFs made from it.
+# Relative, like `OUTPUT_DIR`.
+REPORTS_DIR = "reports"
+
 # One log per run, named after when it started (e.g.
 # `logs/2026-10-18_13-24-01.log`), so names sort in time order. Relative,
 # like `OUTPUT_DIR`.

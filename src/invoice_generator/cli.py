@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.text import Text
 
 from invoice_generator.calendar_api import calendar_service, fetch_events
+from invoice_generator.drive_api import drive_service
 from invoice_generator.event_processing import (
     Lesson,
     SkipReason,
@@ -27,13 +28,17 @@ from invoice_generator.data_loader import load_student_data, load_bank_details, 
 from invoice_generator.google_auth import authenticate
 from invoice_generator.logging_config import setup_logging, get_logger
 from invoice_generator.models import StudentInfo
+from invoice_generator.reports import ReportsOutcome, write_reports
+from invoice_generator.summariser import ModelUnavailable, check_model
 from invoice_generator.constants import (
     BANK_DETAILS_FILENAME,
     CONTACT_DETAILS_FILENAME,
     CREDENTIALS_FILENAME,
     DATA_DIR,
     GOOGLE_CALENDAR_SCOPES,
+    GOOGLE_DRIVE_SCOPES,
     OUTPUT_DIR,
+    REPORTS_DIR,
     STUDENTS_FILENAME,
     TOKEN_FILENAME,
 )
@@ -133,6 +138,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "the last full month. For example, if the script is run on "
             "2024-09-03, the end of the invoice period will default to "
             "2024-08-31."
+        )
+    )
+
+    parser.add_argument(
+        "--reports",
+        action="store_true",
+        help=(
+            "Also draft lesson reports, after the invoices, for students "
+            "with `reports` set in `students.json`. Each lesson in their "
+            "Google Drive folders is summarised by Apple's on-device model, "
+            "so lesson files never leave your Mac (needs macOS 27). Edit "
+            "the reports, then run `render-reports` to make PDFs."
+        )
+    )
+    parser.add_argument(
+        "--reports-dir",
+        default=REPORTS_DIR,
+        metavar="path",
+        help=(
+            "Directory to write lesson reports to, created if it does not "
+            "exist. Reports already there are never overwritten. Relative "
+            "paths are resolved against the current directory (default: "
+            f"`{REPORTS_DIR}`)."
         )
     )
 
@@ -240,6 +268,34 @@ def print_inactive_students(
         logger.info(f"{student} not seen in this period")
 
 
+def print_reports_outcome(outcome: ReportsOutcome, reports_dir: Path) -> None:
+    """Prints where the reports were saved, what to check in them, and
+    any left as they were.
+
+    Args:
+        outcome: What `write_reports` did
+        reports_dir: Directory the reports are in
+    """
+    if outcome.written:
+        console.print(f"\n[cyan]Reports saved to:[/cyan] {reports_dir.resolve()}",
+                      soft_wrap=True)
+        for path in outcome.written:
+            console.print(f"  {path.name}", markup=False, soft_wrap=True)
+    else:
+        console.print("\n[cyan]No reports to write[/cyan]")
+
+    if outcome.warnings:
+        console.print("\n[yellow]Check these in the reports:[/yellow]")
+        for student, warning in outcome.warnings:
+            console.print(f"  {student}: {warning}", markup=False, soft_wrap=True)
+
+    if outcome.kept:
+        console.print("\n[yellow]Reports already there, so left as they are "
+                      "(delete them to write them again):[/yellow]")
+        for path in outcome.kept:
+            console.print(f"  {path.name}", markup=False, soft_wrap=True)
+
+
 def main(argv: list[str] | None = None) -> None:
     # Set up logging first - detailed logs written to file
     log_file = setup_logging()
@@ -256,11 +312,20 @@ def main(argv: list[str] | None = None) -> None:
     validate_students(args.only, student_data)
     console.print("[green]✓[/green] [cyan]Configuration files loaded[/cyan]")
 
+    # Check Apple's model can be used before anything else, so that a
+    # problem with it (e.g. `fm`'s terms not agreed to) is found straight away
+    if args.reports:
+        try:
+            check_model()
+        except ModelUnavailable as e:
+            console.print(f"[red]Can't write reports:[/red] {e}", soft_wrap=True)
+            raise SystemExit(1) from None
+
     # Sign in to Google
     logger.info("Authenticating with Google...")
+    scopes = GOOGLE_CALENDAR_SCOPES + (GOOGLE_DRIVE_SCOPES if args.reports else [])
     creds = authenticate(
-        data_dir / CREDENTIALS_FILENAME, data_dir / TOKEN_FILENAME,
-        GOOGLE_CALENDAR_SCOPES,
+        data_dir / CREDENTIALS_FILENAME, data_dir / TOKEN_FILENAME, scopes
     )
     console.print("[green]✓[/green] [cyan]Authenticated with Google[/cyan]")
 
@@ -288,4 +353,16 @@ def main(argv: list[str] | None = None) -> None:
     # Inactive students are only of interest when invoicing everyone
     if not args.only:
         print_inactive_students(lessons, student_data)
+
+    # Reports last, as they take a while: the invoices can be sent meanwhile
+    if args.reports:
+        console.print("\n[cyan]Writing lesson reports...[/cyan]")
+        reports_dir = Path(args.reports_dir)
+        try:
+            outcome = write_reports(lessons, student_data, args.start, args.end,
+                                    drive_service(creds), reports_dir)
+        except ModelUnavailable as e:
+            console.print(f"[red]Stopped writing reports:[/red] {e}", soft_wrap=True)
+            raise SystemExit(1) from None
+        print_reports_outcome(outcome, reports_dir)
     console.print()

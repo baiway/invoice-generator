@@ -18,11 +18,14 @@ from invoice_generator.cli import (
     main,
     parse_args,
     print_inactive_students,
+    print_reports_outcome,
     print_skipped_events,
     validate_students,
 )
 from invoice_generator.event_processing import SkipReason, SkippedEvent
 from invoice_generator.models import StudentInfo
+from invoice_generator.reports import ReportsOutcome
+from invoice_generator.summariser import ModelUnavailable
 from invoice_generator.utils import get_last_full_month
 
 
@@ -50,6 +53,17 @@ class TestParseArgs:
                            "--output-dir", "/srv/invoices"])
         assert args.data_dir == "/srv/tutoring"
         assert args.output_dir == "/srv/invoices"
+
+    def test_reports_are_off_by_default(self):
+        """Without `--reports`, only invoices are written."""
+        args = parse_args([])
+        assert args.reports is False
+        assert args.reports_dir == "reports"
+
+    def test_report_flags(self):
+        args = parse_args(["--reports", "--reports-dir", "/srv/reports"])
+        assert args.reports is True
+        assert args.reports_dir == "/srv/reports"
 
     def test_unknown_flag_exits(self):
         """argparse should reject unrecognised flags."""
@@ -281,6 +295,43 @@ class TestPrintInactiveStudents:
         assert capsys.readouterr().out == ""
 
 
+class TestPrintReportsOutcome:
+    """Tests for print_reports_outcome function."""
+
+    def test_prints_reports_then_warnings_then_those_kept(self, tmp_path, capsys):
+        outcome = ReportsOutcome(
+            written=[tmp_path / "sam-smith-report.typ"],
+            kept=[tmp_path / "jo-bloggs-report.typ"],
+            warnings=[("Sam Smith", "no lesson folder for 2026-10-05")],
+        )
+
+        print_reports_outcome(outcome, tmp_path)
+
+        assert capsys.readouterr().out == (
+            f"\nReports saved to: {tmp_path.resolve()}\n"
+            "  sam-smith-report.typ\n"
+            "\n"
+            "Check these in the reports:\n"
+            "  Sam Smith: no lesson folder for 2026-10-05\n"
+            "\n"
+            "Reports already there, so left as they are (delete them to write "
+            "them again):\n"
+            "  jo-bloggs-report.typ\n"
+        )
+
+    def test_says_when_there_was_nothing_to_write(self, tmp_path, capsys):
+        print_reports_outcome(ReportsOutcome(), tmp_path)
+
+        assert capsys.readouterr().out == "\nNo reports to write\n"
+
+    def test_warnings_are_not_read_as_markup(self, tmp_path, capsys):
+        outcome = ReportsOutcome(warnings=[("Sam", "summary failed ([bold] x)")])
+
+        print_reports_outcome(outcome, tmp_path)
+
+        assert "Sam: summary failed ([bold] x)" in capsys.readouterr().out
+
+
 class TestMain:
     """Tests for the main entry point."""
 
@@ -293,6 +344,8 @@ class TestMain:
             "load_bank_details", "load_contact_details", "authenticate",
             "calendar_service", "fetch_events", "process_events", "print_skipped_events",
             "print_inactive_students", "write_invoices", "console",
+            "drive_service", "write_reports", "print_reports_outcome",
+            "check_model",
         ):
             mock = MagicMock(name=name)
             monkeypatch.setattr(f"invoice_generator.cli.{name}", mock)
@@ -391,3 +444,67 @@ class TestMain:
             ["Alice Smith"], pipeline["load_student_data"].return_value
         )
         pipeline["print_inactive_students"].assert_not_called()
+
+    def test_no_reports_without_the_flag(self, pipeline):
+        main([])
+
+        pipeline["check_model"].assert_not_called()
+        pipeline["write_reports"].assert_not_called()
+
+    def test_reports_come_after_the_invoices_and_follow_ups(self, pipeline):
+        """Reports take a while, so everything about the invoices comes
+        first: they can be sent while the reports are written."""
+        order = []
+        for name in ("write_invoices", "print_skipped_events",
+                     "print_inactive_students", "write_reports"):
+            pipeline[name].side_effect = (
+                lambda *args, name=name: order.append(name) or MagicMock()
+            )
+
+        main(["--reports", "--reports-dir", "/srv/reports"])
+
+        assert order == ["write_invoices", "print_skipped_events",
+                         "print_inactive_students", "write_reports"]
+        args = pipeline["write_reports"].call_args.args
+        assert args[0] is pipeline["lessons"]
+        assert args[4] is pipeline["drive_service"].return_value
+        assert args[5] == Path("/srv/reports")
+        pipeline["drive_service"].assert_called_once_with(
+            pipeline["authenticate"].return_value
+        )
+        pipeline["print_reports_outcome"].assert_called_once()
+
+    def test_reports_need_drive_access(self, pipeline):
+        main(["--reports"])
+
+        assert pipeline["authenticate"].call_args.args[2] == [
+            "https://www.googleapis.com/auth/calendar.readonly",
+            "https://www.googleapis.com/auth/drive.readonly",
+        ]
+
+    def test_model_is_checked_before_anything_else(self, pipeline):
+        """Apple's model being unusable stops the run before signing in, so
+        the problem is found straight away."""
+        pipeline["check_model"].side_effect = ModelUnavailable(
+            "run `sudo fm license`"
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--reports"])
+
+        assert exc_info.value.code == 1
+        pipeline["authenticate"].assert_not_called()
+        message = pipeline["console"].print.call_args.args[0]
+        assert "Can't write reports" in message
+        assert "sudo fm license" in message
+
+    def test_model_failing_midway_stops_the_reports(self, pipeline):
+        """The invoices are already written by then."""
+        pipeline["write_reports"].side_effect = ModelUnavailable("gone")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--reports"])
+
+        assert exc_info.value.code == 1
+        pipeline["write_invoices"].assert_called_once()
+        assert "Stopped writing reports" in pipeline["console"].print.call_args.args[0]
