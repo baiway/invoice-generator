@@ -5,14 +5,14 @@ This guide covers everything `generate-invoices` needs before its first run: acc
 ## 1. Google Calendar API credentials
 
 1. Visit the [Google Developers Console](https://console.developers.google.com/) and create a new project.
-2. Enable the Google Calendar API for your project.
+2. Enable the Google Calendar API for your project. For [lesson reports](#5-lesson-reports-optional), enable the Google Drive API too.
 3. In the "Credentials" section, create a new OAuth client ID. If prompted, configure the OAuth consent screen, and add your own Google account as a test user.
 4. Set the application type to "Desktop app" and name your client.
 5. Download the JSON file containing your credentials, and rename it `credentials.json`.
 
 For detailed steps, refer to the [official Google Calendar API documentation](https://developers.google.com/calendar/quickstart/python).
 
-The generator only asks for read-only access to your calendar.
+The generator only asks for read-only access to your calendar, and, when writing lesson reports, to your Google Drive.
 
 ## 2. The `data/` directory
 
@@ -122,6 +122,12 @@ Sam Maths/
 ```
 
 A lesson's folder can hold anything: GoodNotes exports and other PDFs, photos and screenshots, Google Docs, Slides and Sheets, and PowerPoint files. Name files after what's in them (e.g. "Integration by substitution.pdf" rather than "Note 14 Oct 2026.pdf"): names are read first, and are often more reliable than handwriting.
+
+### Google Drive access
+
+The generator reads the folders as you, through the same Google sign-in as your calendar, so they don't need to be shared for it to read them. The first run with `--reports` opens the browser for you to sign in again and allow read-only access to Google Drive. Make sure the Google Drive API is enabled for your project (see [step 1](#1-google-calendar-api-credentials)).
+
+The links in a report, though, only open for parents and students if the lesson folders are shared with "Anyone with the link". Folders inherit sharing from the folder they're in, so it's enough to share each of a student's `folders` once.
 
 ## Troubleshooting
 

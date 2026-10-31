@@ -57,6 +57,7 @@ invoice-generator/
 │       ├── cli.py                # Command line interface and entry point
 │       ├── google_auth.py        # Signing in to Google
 │       ├── calendar_api.py       # Google Calendar API integration
+│       ├── drive_api.py          # Google Drive API integration (lesson folders)
 │       ├── event_processing.py   # Matching events to students
 │       ├── invoice_generator.py  # PDF generation with Typst
 │       ├── data_loader.py        # JSON loading with Pydantic validation
