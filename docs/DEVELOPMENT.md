@@ -66,6 +66,7 @@ invoice-generator/
 │       ├── formatting.py         # Display formatting (dates, times, currency)
 │       ├── py.typed              # PEP 561 marker: the package ships types
 │       └── templates/
+│           ├── style.typ         # Page and text styling shared by every PDF
 │           └── invoice.typ       # Invoice layout, shipped with the package
 ├── tests/                    # Test suite, one `test_<module>.py` per module
 ├── data/                     # Your configuration (git-ignored; see SETUP.md)
