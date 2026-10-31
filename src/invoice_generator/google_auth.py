@@ -10,10 +10,15 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
+from rich.console import Console
 
 from invoice_generator.logging_config import get_logger
 
 logger = get_logger(__name__)
+console = Console()
+
+# Shown under the sign-in message, as the browser normally opens by itself
+SIGN_IN_PROMPT = "  If your browser doesn't open, go to {url}"
 
 
 def authenticate(
@@ -48,25 +53,27 @@ def authenticate(
     # The token is loaded with the scopes it was granted, not `scopes`, so
     # that missing access can be noticed now rather than as a 403 later.
     creds = None
+    reason = "Signing in to Google"
     if token_path.is_file():
         creds = Credentials.from_authorized_user_file(token_path)
         if not creds.has_scopes(scopes):
-            logger.warning("Saved Google sign-in lacks access this run needs; "
-                           "signing in again")
+            reason = "Signing in to Google again, as this run needs more access"
             scopes = sorted(set(scopes) | set(creds.scopes or []))
             creds = None
         elif creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
             except RefreshError:
-                logger.warning("Could not refresh Google token; signing in again")
+                reason = "Google sign-in has expired, so signing in again"
                 creds = None
             else:
                 token_path.write_text(creds.to_json())
 
     if not creds or not creds.valid:
+        logger.info(reason)
+        console.print(f"[cyan]{reason}...[/cyan]")
         flow = InstalledAppFlow.from_client_secrets_file(credentials_path, scopes)
-        creds = flow.run_local_server(port=0)
+        creds = flow.run_local_server(port=0, authorization_prompt_message=SIGN_IN_PROMPT)
         token_path.write_text(creds.to_json())
 
     return creds

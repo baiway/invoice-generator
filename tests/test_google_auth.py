@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from google.auth.exceptions import RefreshError
 
-from invoice_generator.google_auth import authenticate
+from invoice_generator.google_auth import SIGN_IN_PROMPT, authenticate
 
 CALENDAR = "https://www.googleapis.com/auth/calendar.readonly"
 DRIVE = "https://www.googleapis.com/auth/drive.readonly"
@@ -93,7 +93,7 @@ class TestAuthenticate:
         google["flow"].assert_not_called()
         assert files[1].read_text() == '{"token": "refreshed_token"}'
 
-    def test_failed_refresh_falls_back_to_signing_in(self, files, google, caplog):
+    def test_failed_refresh_falls_back_to_signing_in(self, files, google, capsys):
         """A revoked or lapsed refresh token should mean signing in again,
         not a crash."""
         creds = saved_creds(valid=False, expired=True)
@@ -101,9 +101,11 @@ class TestAuthenticate:
         google["from_file"].return_value = creds
 
         assert authenticate(*files, [CALENDAR]) is google["new_creds"]
-        google["flow"].return_value.run_local_server.assert_called_once_with(port=0)
+        google["flow"].return_value.run_local_server.assert_called_once_with(
+            port=0, authorization_prompt_message=SIGN_IN_PROMPT
+        )
         assert files[1].read_text() == '{"token": "new_token"}'
-        assert "signing in again" in caplog.text
+        assert "sign-in has expired, so signing in again" in capsys.readouterr().out
 
     def test_invalid_token_without_refresh_token_means_signing_in(self, files, google):
         """An invalid token that can't be refreshed needs a new sign-in."""
@@ -114,7 +116,7 @@ class TestAuthenticate:
         assert authenticate(*files, [CALENDAR]) is google["new_creds"]
         assert files[1].read_text() == '{"token": "new_token"}'
 
-    def test_no_token_file_means_signing_in(self, tmp_path, google):
+    def test_no_token_file_means_signing_in(self, tmp_path, google, capsys):
         """The first run signs in through the browser and saves the token."""
         creds_file = tmp_path / "credentials.json"
         token_file = tmp_path / "token.json"
@@ -124,9 +126,16 @@ class TestAuthenticate:
         google["flow"].assert_called_once_with(creds_file, [CALENDAR])
         google["from_file"].assert_not_called()
         assert token_file.read_text() == '{"token": "new_token"}'
+        assert capsys.readouterr().out == "Signing in to Google...\n"
+
+    def test_sign_in_prompt_offers_the_link(self):
+        """The library fills in `{url}`, for when the browser doesn't open."""
+        assert SIGN_IN_PROMPT.format(url="https://example.com") == (
+            "  If your browser doesn't open, go to https://example.com"
+        )
 
     def test_missing_scope_means_signing_in_for_old_and_new(
-        self, files, google, caplog
+        self, files, google, capsys
     ):
         """A token without Drive access, the first time reports are
         written, should mean signing in again for both, so the next
@@ -137,7 +146,7 @@ class TestAuthenticate:
         assert authenticate(*files, [CALENDAR, DRIVE]) is google["new_creds"]
         google["flow"].assert_called_once_with(files[0], [CALENDAR, DRIVE])
         creds.refresh.assert_not_called()
-        assert "lacks access" in caplog.text
+        assert "again, as this run needs more access" in capsys.readouterr().out
 
     def test_extra_scopes_are_not_a_reason_to_sign_in(self, files, google):
         """A token with Drive access does for an invoices-only run."""
