@@ -20,7 +20,7 @@ flowchart TD
 A run of `generate-invoices` ([`cli.py`](../src/invoice_generator/cli.py)) goes through these stages:
 
 1. **Load the configuration.** [`data_loader.py`](../src/invoice_generator/data_loader.py) reads the JSON files in `data/` and validates them against the Pydantic models in [`models.py`](../src/invoice_generator/models.py), which also normalise sort codes, account numbers and phone numbers.
-2. **Fetch events.** [`calendar_api.py`](../src/invoice_generator/calendar_api.py) signs in to Google with read-only access, and fetches every event in the invoice period, a page of results at a time.
+2. **Fetch events.** [`google_auth.py`](../src/invoice_generator/google_auth.py) signs in to Google with read-only access, and [`calendar_api.py`](../src/invoice_generator/calendar_api.py) fetches every event in the invoice period, a page of results at a time.
 3. **Match events to students.** [`event_processing.py`](../src/invoice_generator/event_processing.py) drops cancelled events, then matches the rest by attendee email or, for events with no one else invited, by title. The rules are described in [Naming calendar events](SETUP.md#3-naming-calendar-events). Events that look like lessons but can't be matched are kept, with the reason, to report at the end.
 4. **Render invoices.** [`invoice_generator.py`](../src/invoice_generator/invoice_generator.py) groups lessons into one PDF per private client and one per agency, and formats everything for display (dates, times, durations and amounts, using [`formatting.py`](../src/invoice_generator/formatting.py)). The result is passed as JSON to the [Typst](https://typst.app) template [`invoice.typ`](../src/invoice_generator/templates/invoice.typ), which only does layout. Because names arrive as data, characters in them can never be read as Typst markup.
 5. **Report.** The CLI prints where the invoices and log were saved, then the skipped events grouped by reason, then any students with no lessons in the period.
@@ -55,6 +55,7 @@ invoice-generator/
 ├── src/
 │   └── invoice_generator/    # The package itself
 │       ├── cli.py                # Command line interface and entry point
+│       ├── google_auth.py        # Signing in to Google
 │       ├── calendar_api.py       # Google Calendar API integration
 │       ├── event_processing.py   # Matching events to students
 │       ├── invoice_generator.py  # PDF generation with Typst

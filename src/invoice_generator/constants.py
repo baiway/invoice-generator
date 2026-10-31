@@ -30,5 +30,6 @@ OUTPUT_DIR = "invoices"
 LOG_DIR = "logs"
 LOG_FILENAME_FORMAT = "%Y-%m-%d_%H-%M-%S.log"
 
-# Google Calendar API
+# Google APIs. Read-only access is all the generator ever needs.
 GOOGLE_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]

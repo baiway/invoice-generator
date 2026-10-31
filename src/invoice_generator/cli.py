@@ -13,7 +13,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.text import Text
 
-from invoice_generator.calendar_api import authenticate, fetch_events
+from invoice_generator.calendar_api import calendar_service, fetch_events
 from invoice_generator.event_processing import (
     Lesson,
     SkipReason,
@@ -24,6 +24,7 @@ from invoice_generator.formatting import format_british_date, format_24h_time
 from invoice_generator.utils import get_last_full_month
 from invoice_generator.invoice_generator import write_invoices
 from invoice_generator.data_loader import load_student_data, load_bank_details, load_contact_details
+from invoice_generator.google_auth import authenticate
 from invoice_generator.logging_config import setup_logging, get_logger
 from invoice_generator.models import StudentInfo
 from invoice_generator.constants import (
@@ -31,6 +32,7 @@ from invoice_generator.constants import (
     CONTACT_DETAILS_FILENAME,
     CREDENTIALS_FILENAME,
     DATA_DIR,
+    GOOGLE_CALENDAR_SCOPES,
     OUTPUT_DIR,
     STUDENTS_FILENAME,
     TOKEN_FILENAME,
@@ -254,16 +256,17 @@ def main(argv: list[str] | None = None) -> None:
     validate_students(args.only, student_data)
     console.print("[green]✓[/green] [cyan]Configuration files loaded[/cyan]")
 
-    # Authenticate Google Calendar
-    logger.info("Authenticating with Google Calendar...")
-    service = authenticate(
-        data_dir / CREDENTIALS_FILENAME, data_dir / TOKEN_FILENAME
+    # Sign in to Google
+    logger.info("Authenticating with Google...")
+    creds = authenticate(
+        data_dir / CREDENTIALS_FILENAME, data_dir / TOKEN_FILENAME,
+        GOOGLE_CALENDAR_SCOPES,
     )
     console.print("[green]✓[/green] [cyan]Authenticated with Google[/cyan]")
 
     # Fetch all Google Calendar events over the invoice period
     logger.info("Fetching and processing Google Calendar events")
-    events = fetch_events(service, args.start, args.end)
+    events = fetch_events(calendar_service(creds), args.start, args.end)
 
     # Match events to the students listed in `students.json`, giving each
     # student's lessons: {"Alice": [Lesson(start, end), ...], ...}

@@ -1,233 +1,25 @@
 """
 Tests for src/invoice_generator/calendar_api.py Google Calendar API integration.
 
-This module tests authentication and event fetching with mocked Google API
-responses to avoid external dependencies.
+This module tests event fetching with mocked Google API responses to avoid
+external dependencies.
 """
 
-import pytest
 from datetime import datetime, UTC
 from unittest.mock import MagicMock, patch
-from google.auth.exceptions import RefreshError
 
-from invoice_generator.calendar_api import authenticate, fetch_events
+from invoice_generator.calendar_api import calendar_service, fetch_events
 
 
-class TestAuthenticate:
-    """Tests for authenticate function with Google OAuth."""
+class TestCalendarService:
+    """Tests for calendar_service function."""
 
-    def test_missing_credentials_file_raises_error(self, tmp_path):
-        """Missing credentials.json should raise FileNotFoundError."""
-        nonexistent_creds = tmp_path / "nonexistent" / "credentials.json"
-
-        with pytest.raises(FileNotFoundError) as exc_info:
-            authenticate(nonexistent_creds, tmp_path / "token.json")
-
-        assert "not found" in str(exc_info.value)
-
-    def test_existing_valid_token_used_for_auth(self, tmp_path):
-        """Existing valid token should be used without refresh."""
-        # Create credentials.json and token.json files
-        creds_file = tmp_path / "credentials.json"
-        token_file = tmp_path / "token.json"
-        creds_file.write_text('{"installed": {}}')
-        token_file.write_text('{"token": "valid_token"}')
-
-        # Mock Credentials
-        mock_creds = MagicMock()
-        mock_creds.valid = True
-        mock_creds.expired = False
-
-        # Mock build to return service
-        mock_service = MagicMock()
-
-        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("invoice_generator.calendar_api.build") as mock_build:
-            mock_from_file.return_value = mock_creds
-            mock_build.return_value = mock_service
-
-            result = authenticate(creds_file, token_file)
-
-            # Should load existing creds and build service
-            mock_from_file.assert_called_once()
-            mock_build.assert_called_once_with(
-                "calendar", "v3", credentials=mock_creds
-            )
-            assert result == mock_service
-
-    def test_expired_token_with_refresh_token_triggers_refresh(
-        self, tmp_path
-    ):
-        """Expired token with refresh_token should trigger refresh."""
-        creds_file = tmp_path / "credentials.json"
-        token_file = tmp_path / "token.json"
-        creds_file.write_text('{"installed": {}}')
-        token_file.write_text('{"token": "expired_token"}')
-
-        # Mock expired credentials with refresh token
-        mock_creds = MagicMock()
-        mock_creds.valid = False
-        mock_creds.expired = True
-        mock_creds.refresh_token = "refresh_token_123"
-        mock_creds.to_json.return_value = '{"token": "refreshed_token"}'
-        # A successful refresh makes the credentials valid again
-        mock_creds.refresh.side_effect = (
-            lambda request: setattr(mock_creds, "valid", True)
-        )
-
-        mock_service = MagicMock()
-
-        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("invoice_generator.calendar_api.Request"), \
-             patch("invoice_generator.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
-             patch("invoice_generator.calendar_api.build") as mock_build:
-            mock_from_file.return_value = mock_creds
-            mock_build.return_value = mock_service
-
-            result = authenticate(creds_file, token_file)
-
-            # Should refresh the credentials rather than sign in again
-            mock_creds.refresh.assert_called_once()
-            mock_flow_create.assert_not_called()
-            # Should save refreshed token
-            assert token_file.read_text() == '{"token": "refreshed_token"}'
-            assert result == mock_service
-
-    def test_failed_refresh_falls_back_to_oauth_flow(self, tmp_path, caplog):
-        """A revoked or lapsed refresh token should mean signing in again,
-        not a crash."""
-        creds_file = tmp_path / "credentials.json"
-        token_file = tmp_path / "token.json"
-        creds_file.write_text('{"installed": {}}')
-        token_file.write_text('{"token": "revoked_token"}')
-
-        mock_creds = MagicMock()
-        mock_creds.valid = False
-        mock_creds.expired = True
-        mock_creds.refresh_token = "revoked_refresh_token"
-        mock_creds.refresh.side_effect = RefreshError("invalid_grant")
-
-        mock_creds_new = MagicMock()
-        mock_creds_new.to_json.return_value = '{"token": "new_token"}'
-        mock_flow = MagicMock()
-        mock_flow.run_local_server.return_value = mock_creds_new
-
-        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("invoice_generator.calendar_api.Request"), \
-             patch("invoice_generator.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
-             patch("invoice_generator.calendar_api.build") as mock_build:
-            mock_from_file.return_value = mock_creds
-            mock_flow_create.return_value = mock_flow
-
-            authenticate(creds_file, token_file)
-
-            mock_flow.run_local_server.assert_called_once_with(port=0)
-            mock_build.assert_called_once_with(
-                "calendar", "v3", credentials=mock_creds_new
-            )
-            assert token_file.read_text() == '{"token": "new_token"}'
-            assert "signing in again" in caplog.text
-
-    def test_invalid_token_triggers_new_oauth_flow(
-        self, tmp_path
-    ):
-        """Invalid token without refresh should trigger new OAuth flow."""
-        creds_file = tmp_path / "credentials.json"
-        token_file = tmp_path / "token.json"
-        creds_file.write_text('{"installed": {}}')
-        token_file.write_text('{"token": "invalid_token"}')
-
-        # Mock invalid credentials (no refresh token)
-        mock_creds_invalid = MagicMock()
-        mock_creds_invalid.valid = False
-        mock_creds_invalid.expired = True
-        mock_creds_invalid.refresh_token = None  # No refresh token
-
-        # Mock new credentials from OAuth flow
-        mock_creds_new = MagicMock()
-        mock_creds_new.to_json.return_value = '{"token": "new_token"}'
-
-        mock_flow = MagicMock()
-        mock_flow.run_local_server.return_value = mock_creds_new
-
-        mock_service = MagicMock()
-
-        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("invoice_generator.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
-             patch("invoice_generator.calendar_api.build") as mock_build:
-            mock_from_file.return_value = mock_creds_invalid
-            mock_flow_create.return_value = mock_flow
-            mock_build.return_value = mock_service
-
-            result = authenticate(creds_file, token_file)
-
-            # Should create new OAuth flow
-            mock_flow_create.assert_called_once()
-            mock_flow.run_local_server.assert_called_once_with(port=0)
-            # Should save new token
-            assert token_file.read_text() == '{"token": "new_token"}'
-            assert result == mock_service
-
-    def test_no_token_file_triggers_new_oauth_flow(
-        self, tmp_path
-    ):
-        """Missing token file should trigger new OAuth flow."""
-        creds_file = tmp_path / "credentials.json"
-        token_file = tmp_path / "token.json"
-        creds_file.write_text('{"installed": {}}')
-        # Don't create token_file - it should not exist
-
-        # Mock new credentials from OAuth flow
-        mock_creds = MagicMock()
-        mock_creds.to_json.return_value = '{"token": "new_token"}'
-
-        mock_flow = MagicMock()
-        mock_flow.run_local_server.return_value = mock_creds
-
-        mock_service = MagicMock()
-
-        with patch("invoice_generator.calendar_api.InstalledAppFlow.from_client_secrets_file") as mock_flow_create, \
-             patch("invoice_generator.calendar_api.build") as mock_build:
-            mock_flow_create.return_value = mock_flow
-            mock_build.return_value = mock_service
-
-            result = authenticate(creds_file, token_file)
-
-            # Should create OAuth flow
-            mock_flow_create.assert_called_once()
-            mock_flow.run_local_server.assert_called_once_with(port=0)
-            # Should create and save token
-            assert token_file.exists()
-            assert token_file.read_text() == '{"token": "new_token"}'
-            assert result == mock_service
-
-    def test_returns_google_calendar_service_object(
-        self, tmp_path
-    ):
-        """Should return Google Calendar service object."""
-        creds_file = tmp_path / "credentials.json"
-        token_file = tmp_path / "token.json"
-        creds_file.write_text('{"installed": {}}')
-        token_file.write_text('{"token": "valid_token"}')
-
-        mock_creds = MagicMock()
-        mock_creds.valid = True
-        mock_creds.expired = False  # Explicitly set to False
-
-        mock_service = MagicMock()
-
-        with patch("invoice_generator.calendar_api.Credentials.from_authorized_user_file") as mock_from_file, \
-             patch("invoice_generator.calendar_api.build") as mock_build:
-            mock_from_file.return_value = mock_creds
-            mock_build.return_value = mock_service
-
-            result = authenticate(creds_file, token_file)
-
-            # Verify build was called with correct arguments
-            mock_build.assert_called_once_with(
-                "calendar", "v3", credentials=mock_creds
-            )
-            assert result == mock_service
+    def test_builds_the_calendar_api_with_the_credentials(self):
+        """The service should be Calendar v3, signed in with `creds`."""
+        creds = MagicMock()
+        with patch("invoice_generator.calendar_api.build") as mock_build:
+            assert calendar_service(creds) is mock_build.return_value
+        mock_build.assert_called_once_with("calendar", "v3", credentials=creds)
 
 
 def make_service(*pages):

@@ -291,7 +291,7 @@ class TestMain:
         for name in (
             "setup_logging", "validate_students", "load_student_data",
             "load_bank_details", "load_contact_details", "authenticate",
-            "fetch_events", "process_events", "print_skipped_events",
+            "calendar_service", "fetch_events", "process_events", "print_skipped_events",
             "print_inactive_students", "write_invoices", "console",
         ):
             mock = MagicMock(name=name)
@@ -308,8 +308,11 @@ class TestMain:
         main(["--from", "2024-01-01", "--to", "2024-01-31"])
 
         pipeline["authenticate"].assert_called_once()
+        pipeline["calendar_service"].assert_called_once_with(
+            pipeline["authenticate"].return_value
+        )
         pipeline["fetch_events"].assert_called_once_with(
-            pipeline["authenticate"].return_value,
+            pipeline["calendar_service"].return_value,
             datetime(2024, 1, 1),
             datetime(2024, 1, 31, 23, 59, 59),
         )
@@ -317,6 +320,14 @@ class TestMain:
         assert (pipeline["process_events"].call_args.args[0]
                 is pipeline["fetch_events"].return_value)
         assert pipeline["write_invoices"].call_args.args[0] is pipeline["lessons"]
+
+    def test_asks_for_calendar_access_only(self, pipeline):
+        """Invoices need read-only calendar access, and nothing more."""
+        main([])
+
+        assert pipeline["authenticate"].call_args.args[2] == [
+            "https://www.googleapis.com/auth/calendar.readonly"
+        ]
 
     def test_reports_inactive_students_for_a_full_run(self, pipeline):
         """Without `--only`, inactive students should be reported."""
@@ -362,7 +373,7 @@ class TestMain:
         pipeline["load_contact_details"].assert_called_once_with(
             data_dir / "contact_details.json"
         )
-        pipeline["authenticate"].assert_called_once_with(
+        assert pipeline["authenticate"].call_args.args[:2] == (
             data_dir / "credentials.json", data_dir / "token.json"
         )
 
